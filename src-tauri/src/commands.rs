@@ -1,6 +1,6 @@
 use crate::apps::{CurrentConfig, TerminalApp};
 use crate::backup;
-use crate::theme::{FontSettings, Period, Theme};
+use crate::theme::{FontSettings, Palette, Period, Theme, ThemeVariant};
 use crate::theme_store;
 use serde::Serialize;
 
@@ -93,4 +93,24 @@ pub fn install_theme_from_git(git_url: String) -> Result<Theme, String> {
 #[tauri::command]
 pub fn remove_user_theme(theme_id: String) -> Result<(), String> {
     theme_store::remove_user_theme(&theme_id)
+}
+
+#[tauri::command]
+pub fn create_custom_theme(name: String, variant: ThemeVariant, palette: Palette) -> Result<Theme, String> {
+    theme_store::save_user_theme(name, variant, palette)
+}
+
+/// Only user-created/user-installed themes are exportable; the picker on the
+/// frontend should already be filtered to those, but this is the actual
+/// enforcement point.
+#[tauri::command]
+pub fn list_exportable_themes() -> Result<Vec<Theme>, String> {
+    use crate::theme::ThemeSource;
+    Ok(theme_store::list_themes()?.into_iter().filter(|t| t.source == ThemeSource::UserInstalled).collect())
+}
+
+#[tauri::command]
+pub fn export_theme_to_path(theme_id: String, path: String) -> Result<(), String> {
+    let json = theme_store::export_theme_json(&theme_id)?;
+    std::fs::write(&path, json).map_err(|e| e.to_string())
 }

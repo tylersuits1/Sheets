@@ -1,0 +1,86 @@
+.editor {
+  max-width: 480px;
+  margin: 0 auto;
+  padding: 1.5rem;
+}
+
+.editor h1 {
+  font-size: 1.2em;
+  margin: 0 0 1rem;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin-bottom: 0.9rem;
+  font-size: 0.9em;
+}
+
+.color-section {
+  margin-top: 1.2rem;
+}
+
+.color-section h2 {
+  font-size: 0.85em;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: #888;
+  margin: 0 0 0.5rem;
+}
+
+#core-colors {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.ansi-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.4rem;
+}
+
+.color-row {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.85em;
+}
+
+.color-row .color-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #555;
+}
+
+.color-row input[type="color"] {
+  width: 32px;
+  height: 28px;
+  padding: 2px;
+  flex-shrink: 0;
+}
+
+.color-row input[type="text"] {
+  width: 5.5em;
+  flex-shrink: 0;
+  font-family: "SF Mono", Menlo, Consolas, monospace;
+  padding: 0.3rem 0.4rem;
+}
+
+.editor-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: 1.5rem;
+}
+
+@media (prefers-color-scheme: dark) {
+  .color-section h2,
+  .color-row .color-label {
+    color: #aaa;
+  }
+}

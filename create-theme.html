@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="stylesheet" href="/src/styles.css" />
+    <link rel="stylesheet" href="/src/theme-editor.css" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Create Theme</title>
+    <script type="module" src="/src/create-theme.ts" defer></script>
+  </head>
+
+  <body>
+    <main class="editor">
+      <h1>Create a theme</h1>
+
+      <label class="field">
+        <span>Name</span>
+        <input id="theme-name" type="text" placeholder="My Theme" required />
+      </label>
+
+      <label class="field">
+        <span>Best for</span>
+        <select id="theme-variant">
+          <option value="dark">Dark</option>
+          <option value="light">Light</option>
+          <option value="both">Both</option>
+        </select>
+      </label>
+
+      <div class="color-section">
+        <h2>Core colors</h2>
+        <div id="core-colors"></div>
+      </div>
+
+      <div class="color-section">
+        <h2>Standard (0–7)</h2>
+        <div id="ansi-normal" class="ansi-grid"></div>
+      </div>
+
+      <div class="color-section">
+        <h2>Bright (8–15)</h2>
+        <div id="ansi-bright" class="ansi-grid"></div>
+      </div>
+
+      <p id="form-status" class="status-message"></p>
+
+      <div class="editor-actions">
+        <button type="button" id="cancel-btn">Cancel</button>
+        <button type="button" id="save-btn">Save theme</button>
+      </div>
+    </main>
+  </body>
+</html>

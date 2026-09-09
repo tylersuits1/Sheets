@@ -71,6 +71,7 @@ fn save_user_themes(themes: &[Theme]) -> Result<(), String> {
 
 pub fn list_themes() -> Result<Vec<Theme>, String> {
     let mut themes = built_in_themes();
+    themes.extend(crate::ghostty_import::list_bundled_themes());
     themes.extend(load_user_themes()?);
     Ok(themes)
 }
@@ -109,10 +110,41 @@ pub fn remove_user_theme(id: &str) -> Result<(), String> {
     save_user_themes(&themes)
 }
 
+/// Creates a theme from hand-picked colors (the "File > Create Theme"
+/// window), storing it exactly like a git-installed one but with no
+/// `git_url` — both are `UserInstalled`, which is what makes a theme
+/// eligible for export.
+pub fn save_user_theme(name: String, variant: ThemeVariant, palette: Palette) -> Result<Theme, String> {
+    if name.trim().is_empty() {
+        return Err("theme name can't be empty".to_string());
+    }
+    let theme = Theme { id: slugify(&name), name, variant, source: ThemeSource::UserInstalled, git_url: None, palette };
+
+    let mut themes = load_user_themes()?;
+    themes.retain(|t| t.id != theme.id);
+    themes.push(theme.clone());
+    save_user_themes(&themes)?;
+    Ok(theme)
+}
+
+/// Serializes a user-created/installed theme back into the `sheets-theme.json`
+/// shape, so it can be saved to a file and pushed to a git repo for others to
+/// install via `install_theme_from_git`. Built-in themes (including ones
+/// imported from Ghostty) aren't exportable — there's nothing of the user's
+/// to hand off.
+pub fn export_theme_json(id: &str) -> Result<String, String> {
+    let theme = get_theme(id)?;
+    if theme.source != ThemeSource::UserInstalled {
+        return Err(format!("\"{}\" isn't a user-created theme, so there's nothing to export", theme.name));
+    }
+    let manifest = ThemeManifest { name: theme.name, variant: theme.variant, palette: theme.palette };
+    serde_json::to_string_pretty(&manifest).map_err(|e| e.to_string())
+}
+
 /// The `sheets-theme.json` shape expected at the root of a theme repo, as
 /// documented in the README's "Theme repo format" section — keep the two in
 /// sync (`theme_manifest_matches_documented_format` checks the parsing side).
-#[derive(serde::Deserialize)]
+#[derive(serde::Serialize, serde::Deserialize)]
 struct ThemeManifest {
     name: String,
     variant: ThemeVariant,
@@ -166,7 +198,7 @@ pub fn install_theme_from_git(git_url: &str) -> Result<Theme, String> {
     result
 }
 
-fn slugify(name: &str) -> String {
+pub(crate) fn slugify(name: &str) -> String {
     name.to_lowercase()
         .chars()
         .map(|c| if c.is_alphanumeric() { c } else { '-' })

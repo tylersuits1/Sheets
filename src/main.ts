@@ -196,8 +196,8 @@ function renderThemeSelect() {
   for (const theme of lastThemes) {
     const opt = document.createElement("option");
     opt.value = theme.id;
-    const suffix = theme.source === "user_installed" ? ", user installed" : "";
-    opt.textContent = `${theme.name} (${theme.variant}${suffix})`;
+    const userTag = theme.source === "user_installed" ? " (User)" : "";
+    opt.textContent = `${theme.name}${userTag} — ${theme.variant}`;
     themeSelectEl.appendChild(opt);
   }
   selectDefaultTheme();

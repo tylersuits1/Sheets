@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="stylesheet" href="/src/styles.css" />
+    <link rel="stylesheet" href="/src/theme-editor.css" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Export Theme</title>
+    <script type="module" src="/src/export-theme.ts" defer></script>
+  </head>
+
+  <body>
+    <main class="editor">
+      <h1>Export a theme</h1>
+      <p style="font-size: 0.85em; color: #888; margin-top: -0.5rem;">
+        Saves a <code>sheets-theme.json</code> file you can push to a git repo, so others can install it with
+        "Install a theme from git".
+      </p>
+
+      <label class="field">
+        <span>Theme</span>
+        <select id="theme-select"></select>
+      </label>
+
+      <p id="form-status" class="status-message"></p>
+
+      <div class="editor-actions">
+        <button type="button" id="cancel-btn">Cancel</button>
+        <button type="button" id="export-btn">Export…</button>
+      </div>
+    </main>
+  </body>
+</html>
