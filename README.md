@@ -23,6 +23,43 @@ Early scaffolding — not yet functional.
   the other two via flat key-value config parsing)
 - Distributed via tylersuits.com/sheets and GitHub Releases
 
+## Theme repo format
+
+Installing a theme from git (`install_theme_from_git`) clones the repo and
+reads a `sheets-theme.json` at its root:
+
+```json
+{
+  "name": "Tokyo Night",
+  "variant": "dark",
+  "palette": {
+    "background": "1a1b26",
+    "foreground": "c0caf5",
+    "cursor": "c0caf5",
+    "selection_background": "283457",
+    "selection_foreground": null,
+    "ansi": [
+      "15161e", "f7768e", "9ece6a", "e0af68",
+      "7aa2f7", "bb9af7", "7dcfff", "a9b1d6",
+      "414868", "f7768e", "9ece6a", "e0af68",
+      "7aa2f7", "bb9af7", "7dcfff", "c0caf5"
+    ]
+  }
+}
+```
+
+- `variant` is `"dark"`, `"light"`, or `"both"`.
+- Colors are hex strings without a leading `#`.
+- `ansi` is exactly 16 entries: the standard ANSI 0-15 order (black, red,
+  green, yellow, blue, magenta, cyan, white, then the bright variants of
+  each).
+- `cursor`, `selection_background`, and `selection_foreground` are
+  optional.
+
+This is Sheets' own format, not a wrapper around an existing standard
+(base16, iTerm color schemes, etc.) — repos in other formats aren't
+readable yet.
+
 ## Stack
 
 - [Tauri](https://tauri.app/) (Rust backend + web frontend, vanilla TS)
