@@ -9,35 +9,73 @@
   </head>
 
   <body>
-    <main class="container">
-      <h1>Welcome to Tauri</h1>
+    <main class="app">
+      <header>
+        <h1>Sheets</h1>
+        <p class="subtitle">Themes, fonts, and transparency for your terminal.</p>
+      </header>
 
-      <div class="row">
-        <a href="https://vite.dev" target="_blank">
-          <img src="/src/assets/vite.svg" class="logo vite" alt="Vite logo" />
-        </a>
-        <a href="https://tauri.app" target="_blank">
-          <img
-            src="/src/assets/tauri.svg"
-            class="logo tauri"
-            alt="Tauri logo"
-          />
-        </a>
-        <a href="https://www.typescriptlang.org/docs" target="_blank">
-          <img
-            src="/src/assets/typescript.svg"
-            class="logo typescript"
-            alt="typescript logo"
-          />
-        </a>
-      </div>
-      <p>Click on the Tauri logo to learn more about the framework</p>
+      <nav class="app-tabs" id="app-tabs"></nav>
 
-      <form class="row" id="greet-form">
-        <input id="greet-input" placeholder="Enter a name..." />
-        <button type="submit">Greet</button>
-      </form>
-      <p id="greet-msg"></p>
+      <section class="panel" id="status-panel"></section>
+
+      <section class="panel">
+        <div class="panel-header">
+          <h2>Themes</h2>
+          <div class="period-filter" id="period-filter">
+            <button type="button" data-period="all" class="active">All</button>
+            <button type="button" data-period="day">Day</button>
+            <button type="button" data-period="night">Night</button>
+          </div>
+        </div>
+
+        <div class="theme-picker">
+          <select id="theme-select"></select>
+          <button type="button" id="theme-apply-btn">Apply</button>
+          <button type="button" id="theme-remove-btn" class="danger" hidden>Remove</button>
+        </div>
+        <div class="theme-details" id="theme-details"></div>
+      </section>
+
+      <section class="panel">
+        <h2>Preview</h2>
+        <div class="preview-window" id="preview-window">
+          <div class="preview-titlebar">
+            <span class="preview-dot" style="background: #ff5f57"></span>
+            <span class="preview-dot" style="background: #febc2e"></span>
+            <span class="preview-dot" style="background: #28c840"></span>
+            <img class="preview-icon" src="/ghost-icon.png" alt="" />
+          </div>
+          <pre class="preview-body" id="preview-body"></pre>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2>Font</h2>
+        <form id="font-form" class="inline-form">
+          <input id="font-family" type="text" placeholder="Font family" required />
+          <input id="font-size" type="number" min="6" max="72" step="0.5" placeholder="Size" required />
+          <button type="submit">Apply font</button>
+        </form>
+      </section>
+
+      <section class="panel">
+        <h2>Transparency</h2>
+        <div class="opacity-row">
+          <input id="opacity-slider" type="range" min="0" max="1" step="0.01" value="1" />
+          <span id="opacity-value">100%</span>
+          <button type="button" id="opacity-apply">Apply</button>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2>Install a theme from git</h2>
+        <form id="install-form" class="inline-form">
+          <input id="install-url" type="url" placeholder="https://github.com/you/theme-repo.git" required />
+          <button type="submit">Install</button>
+        </form>
+        <p id="install-status" class="status-message"></p>
+      </section>
     </main>
   </body>
 </html>
