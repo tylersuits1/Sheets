@@ -1,4 +1,5 @@
 use crate::apps::{CurrentConfig, TerminalApp};
+use crate::backup;
 use crate::theme::{FontSettings, Period, Theme};
 use crate::theme_store;
 use serde::Serialize;
@@ -54,17 +55,34 @@ pub fn get_current_theme(app: TerminalApp) -> Result<Option<Theme>, String> {
 #[tauri::command]
 pub fn apply_theme(app: TerminalApp, theme_id: String) -> Result<(), String> {
     let theme = theme_store::get_theme(&theme_id)?;
-    app.adapter().apply_theme(&theme)
+    let adapter = app.adapter();
+    backup::snapshot(app, &adapter.config_path()?)?;
+    adapter.apply_theme(&theme)
 }
 
 #[tauri::command]
 pub fn apply_font(app: TerminalApp, font: FontSettings) -> Result<(), String> {
-    app.adapter().apply_font(&font)
+    let adapter = app.adapter();
+    backup::snapshot(app, &adapter.config_path()?)?;
+    adapter.apply_font(&font)
 }
 
 #[tauri::command]
 pub fn apply_opacity(app: TerminalApp, opacity: f32) -> Result<(), String> {
-    app.adapter().apply_opacity(opacity)
+    let adapter = app.adapter();
+    backup::snapshot(app, &adapter.config_path()?)?;
+    adapter.apply_opacity(opacity)
+}
+
+#[tauri::command]
+pub fn can_undo(app: TerminalApp) -> bool {
+    backup::has_backup(app)
+}
+
+#[tauri::command]
+pub fn undo_last_change(app: TerminalApp) -> Result<(), String> {
+    let path = app.adapter().config_path()?;
+    backup::undo(app, &path)
 }
 
 #[tauri::command]

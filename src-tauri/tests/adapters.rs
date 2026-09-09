@@ -1,4 +1,5 @@
 use sheets_lib::apps::TerminalApp;
+use sheets_lib::backup;
 use sheets_lib::theme::{FontSettings, Period};
 use sheets_lib::theme_store;
 use std::fs;
@@ -118,4 +119,69 @@ fn identify_theme_returns_none_for_unrecognized_colors() {
     let mut custom = theme_store::get_theme("tokyo-night").unwrap().palette;
     custom.background = "ffffff".into();
     assert!(theme_store::identify_theme(&custom).unwrap().is_none());
+}
+
+#[test]
+fn undo_restores_the_hand_written_config_that_preceded_a_change() {
+    let _guard = ENV_LOCK.lock().unwrap();
+    let scratch = std::env::temp_dir().join(format!("sheets-undo-existing-{}", std::process::id()));
+    let _ = fs::remove_dir_all(&scratch);
+    let ghostty_dir = scratch.join("ghostty");
+    fs::create_dir_all(&ghostty_dir).unwrap();
+    let original = "keybind = ctrl+shift+c=copy\nfont-family = Menlo\n";
+    fs::write(ghostty_dir.join("config"), original).unwrap();
+    std::env::set_var("XDG_CONFIG_HOME", &scratch);
+
+    let adapter = TerminalApp::Ghostty.adapter();
+    let path = adapter.config_path().unwrap();
+
+    assert!(!backup::has_backup(TerminalApp::Ghostty));
+    backup::snapshot(TerminalApp::Ghostty, &path).unwrap();
+    assert!(backup::has_backup(TerminalApp::Ghostty));
+
+    let theme = theme_store::get_theme("tokyo-night").unwrap();
+    adapter.apply_theme(&theme).unwrap();
+    assert_ne!(fs::read_to_string(&path).unwrap(), original, "sanity check: the apply should have changed the file");
+
+    backup::undo(TerminalApp::Ghostty, &path).unwrap();
+    assert_eq!(fs::read_to_string(&path).unwrap(), original);
+    assert!(!backup::has_backup(TerminalApp::Ghostty), "undo should consume the backup");
+
+    let _ = fs::remove_dir_all(&scratch);
+}
+
+#[test]
+fn undo_removes_a_config_that_did_not_exist_before_the_change() {
+    let _guard = ENV_LOCK.lock().unwrap();
+    let scratch = std::env::temp_dir().join(format!("sheets-undo-fresh-{}", std::process::id()));
+    let _ = fs::remove_dir_all(&scratch);
+    std::env::set_var("XDG_CONFIG_HOME", &scratch);
+
+    let adapter = TerminalApp::Kitty.adapter();
+    let path = adapter.config_path().unwrap();
+    assert!(!path.exists());
+
+    backup::snapshot(TerminalApp::Kitty, &path).unwrap();
+    let theme = theme_store::get_theme("solarized-light").unwrap();
+    adapter.apply_theme(&theme).unwrap();
+    assert!(path.exists());
+
+    backup::undo(TerminalApp::Kitty, &path).unwrap();
+    assert!(!path.exists(), "undo should remove a config Sheets created from nothing");
+
+    let _ = fs::remove_dir_all(&scratch);
+}
+
+#[test]
+fn undo_with_nothing_to_undo_is_an_error() {
+    let _guard = ENV_LOCK.lock().unwrap();
+    let scratch = std::env::temp_dir().join(format!("sheets-undo-none-{}", std::process::id()));
+    let _ = fs::remove_dir_all(&scratch);
+    std::env::set_var("XDG_CONFIG_HOME", &scratch);
+
+    assert!(!backup::has_backup(TerminalApp::Alacritty));
+    let path = TerminalApp::Alacritty.adapter().config_path().unwrap();
+    assert!(backup::undo(TerminalApp::Alacritty, &path).is_err());
+
+    let _ = fs::remove_dir_all(&scratch);
 }

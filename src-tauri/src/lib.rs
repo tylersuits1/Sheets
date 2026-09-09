@@ -1,4 +1,5 @@
 pub mod apps;
+pub mod backup;
 mod commands;
 pub mod config_dir;
 mod kv_config;
@@ -18,6 +19,8 @@ pub fn run() {
             commands::apply_theme,
             commands::apply_font,
             commands::apply_opacity,
+            commands::can_undo,
+            commands::undo_last_change,
             commands::install_theme_from_git,
             commands::remove_user_theme,
         ])

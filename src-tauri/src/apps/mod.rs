@@ -24,6 +24,14 @@ impl TerminalApp {
             TerminalApp::Alacritty => Box::new(alacritty::AlacrittyAdapter),
         }
     }
+
+    pub fn as_str(self) -> &'static str {
+        match self {
+            TerminalApp::Ghostty => "ghostty",
+            TerminalApp::Kitty => "kitty",
+            TerminalApp::Alacritty => "alacritty",
+        }
+    }
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
