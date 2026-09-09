@@ -25,6 +25,17 @@ Early scaffolding — not yet functional.
 
 ## Stack
 
-- [Tauri](https://tauri.app/) (Rust backend + web frontend) for small,
-  native cross-platform builds
+- [Tauri](https://tauri.app/) (Rust backend + web frontend, vanilla TS)
+  for small, native cross-platform builds
 - Reference app: [Ghostty](https://ghostty.org/) ([docs](https://ghostty.org/docs))
+
+## Dev setup
+
+```bash
+npm install
+npm run tauri dev
+```
+
+Recommended IDE setup: [VS Code](https://code.visualstudio.com/) +
+[Tauri extension](https://marketplace.visualstudio.com/items?itemName=tauri-apps.tauri-vscode) +
+[rust-analyzer](https://marketplace.visualstudio.com/items?itemName=rust-lang.rust-analyzer)
