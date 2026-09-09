@@ -57,8 +57,6 @@ const statusPanelEl = document.querySelector<HTMLElement>("#status-panel")!;
 const periodFilterEl = document.querySelector<HTMLElement>("#period-filter")!;
 const themeSelectEl = document.querySelector<HTMLSelectElement>("#theme-select")!;
 const themeApplyBtn = document.querySelector<HTMLButtonElement>("#theme-apply-btn")!;
-const themeSetDayBtn = document.querySelector<HTMLButtonElement>("#theme-set-day-btn")!;
-const themeSetNightBtn = document.querySelector<HTMLButtonElement>("#theme-set-night-btn")!;
 const themeRemoveBtn = document.querySelector<HTMLButtonElement>("#theme-remove-btn")!;
 const themeDetailsEl = document.querySelector<HTMLElement>("#theme-details")!;
 const previewWindowEl = document.querySelector<HTMLElement>("#preview-window")!;
@@ -221,12 +219,12 @@ async function loadThemes() {
   } catch (err) {
     themeSelectEl.innerHTML = "";
     themeDetailsEl.textContent = `Couldn't load themes: ${errorMessage(err)}`;
-    themeDetailsEl.className = "theme-details status-message error";
+    themeDetailsEl.className = "status-message error";
   }
 }
 
 function renderThemeSelect() {
-  themeDetailsEl.className = "theme-details";
+  themeDetailsEl.className = "status-message";
   themeSelectEl.innerHTML = "";
   for (const theme of lastThemes) {
     const opt = document.createElement("option");
@@ -252,51 +250,30 @@ function selectedThemeInDropdown(): Theme | null {
 function onThemeSelectionChanged() {
   const theme = selectedThemeInDropdown();
   themeRemoveBtn.hidden = !theme || theme.source !== "user_installed";
-  renderThemeDetails(theme);
+  themeDetailsEl.textContent = "";
+  themeDetailsEl.className = "status-message";
   renderPreview(theme);
 }
 
-function renderThemeDetails(theme: Theme | null) {
-  themeDetailsEl.innerHTML = "";
-  if (!theme) return;
+const PERIOD_LABEL: Record<"all" | Period, string> = { all: "All", day: "Day", night: "Night" };
 
-  const swatch = document.createElement("span");
-  swatch.className = "swatch";
-  swatch.style.background = `#${theme.palette.background}`;
-  themeDetailsEl.appendChild(swatch);
-
-  const variantBadge = document.createElement("span");
-  variantBadge.className = `badge ${theme.variant}`;
-  variantBadge.textContent = theme.variant;
-  themeDetailsEl.appendChild(variantBadge);
-
-  if (theme.git_url) {
-    const link = document.createElement("span");
-    link.className = "badge";
-    link.textContent = theme.git_url;
-    themeDetailsEl.appendChild(link);
-  }
-}
-
+// Applying while the Day/Night tab is active also designates the theme for
+// that period, matching whichever tab you were browsing when you hit Apply.
 async function applyTheme() {
   const theme = selectedThemeInDropdown();
   if (!theme) return;
   try {
     await invoke("apply_theme", { app: selectedApp, themeId: theme.id });
+    if (periodFilter === "day") {
+      await invoke("set_day_theme", { app: selectedApp, themeId: theme.id });
+    } else if (periodFilter === "night") {
+      await invoke("set_night_theme", { app: selectedApp, themeId: theme.id });
+    }
     await refreshStatus();
+    themeDetailsEl.textContent = `"${theme.name}" applied to ${PERIOD_LABEL[periodFilter]}.`;
+    themeDetailsEl.className = "status-message success";
   } catch (err) {
     alert(`Couldn't apply "${theme.name}": ${errorMessage(err)}`);
-  }
-}
-
-async function setSelectedThemeFor(period: Period) {
-  const theme = selectedThemeInDropdown();
-  if (!theme) return;
-  try {
-    await invoke(period === "day" ? "set_day_theme" : "set_night_theme", { app: selectedApp, themeId: theme.id });
-    await refreshStatus();
-  } catch (err) {
-    alert(`Couldn't set "${theme.name}" as the ${period} theme: ${errorMessage(err)}`);
   }
 }
 
@@ -431,8 +408,6 @@ window.addEventListener("DOMContentLoaded", async () => {
 
   themeSelectEl.addEventListener("change", onThemeSelectionChanged);
   themeApplyBtn.addEventListener("click", applyTheme);
-  themeSetDayBtn.addEventListener("click", () => setSelectedThemeFor("day"));
-  themeSetNightBtn.addEventListener("click", () => setSelectedThemeFor("night"));
   themeRemoveBtn.addEventListener("click", removeSelectedTheme);
 
   fontForm.addEventListener("submit", async (e) => {

@@ -141,23 +141,6 @@ h1 {
   min-width: 0;
 }
 
-.theme-details {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  margin-top: 0.6rem;
-  min-height: 1.4em;
-  font-size: 0.85em;
-}
-
-.swatch {
-  width: 18px;
-  height: 18px;
-  border-radius: 4px;
-  border: 1px solid rgba(0, 0, 0, 0.15);
-  flex-shrink: 0;
-}
-
 .preview-window {
   border-radius: 10px;
   overflow: hidden;
@@ -193,30 +176,6 @@ h1 {
   line-height: 1.5;
   white-space: pre;
   overflow-x: auto;
-}
-
-.badge {
-  font-size: 0.72em;
-  padding: 0.1rem 0.45rem;
-  border-radius: 999px;
-  background: #eee;
-  color: #555;
-  white-space: nowrap;
-}
-
-.badge.dark {
-  background: #2b2b3a;
-  color: #e5e5f5;
-}
-
-.badge.light {
-  background: #fff6d8;
-  color: #7a6a00;
-}
-
-.badge.both {
-  background: #e3e3ff;
-  color: #34349a;
 }
 
 .inline-form {
@@ -316,10 +275,5 @@ button.danger:hover {
 
   .status-grid dt {
     color: #aaa;
-  }
-
-  .badge {
-    background: #3a3a3a;
-    color: #ddd;
   }
 }
