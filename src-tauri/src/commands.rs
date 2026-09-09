@@ -1,5 +1,5 @@
 use crate::apps::{CurrentConfig, TerminalApp};
-use crate::theme::{FontSettings, Theme};
+use crate::theme::{FontSettings, Period, Theme};
 use crate::theme_store;
 use serde::Serialize;
 
@@ -33,6 +33,22 @@ pub fn get_current_config(app: TerminalApp) -> Result<CurrentConfig, String> {
 #[tauri::command]
 pub fn list_themes() -> Result<Vec<Theme>, String> {
     theme_store::list_themes()
+}
+
+#[tauri::command]
+pub fn list_themes_for_period(period: Period) -> Result<Vec<Theme>, String> {
+    theme_store::list_themes_for_period(period)
+}
+
+/// The theme currently applied to `app`, if its colors match a known theme.
+/// `Ok(None)` covers both "nothing applied yet" and "hand-edited, unknown
+/// colors" — either way, there's no Sheets theme to highlight as active.
+#[tauri::command]
+pub fn get_current_theme(app: TerminalApp) -> Result<Option<Theme>, String> {
+    match app.adapter().read_current_palette()? {
+        Some(palette) => theme_store::identify_theme(&palette),
+        None => Ok(None),
+    }
 }
 
 #[tauri::command]

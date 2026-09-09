@@ -103,6 +103,24 @@ impl KvConfig {
             })
     }
 
+    /// All values for a key that repeats, like Ghostty's `palette` (one
+    /// entry per index). Prefers the managed block wholesale over the
+    /// user's own prior lines, same as `get`.
+    pub fn get_all(&self, key: &str) -> Vec<String> {
+        let managed: Vec<String> = self
+            .managed_lines
+            .iter()
+            .filter_map(|l| self.syntax.parse(l).and_then(|(k, v)| (k == key).then_some(v)))
+            .collect();
+        if !managed.is_empty() {
+            return managed;
+        }
+        self.prefix_lines
+            .iter()
+            .filter_map(|l| self.syntax.parse(l).and_then(|(k, v)| (k == key).then_some(v)))
+            .collect()
+    }
+
     pub fn save(&self, path: &Path) -> Result<(), String> {
         let mut out = self.prefix_lines.clone();
         if !self.managed_lines.is_empty() {

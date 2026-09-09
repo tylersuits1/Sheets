@@ -1,5 +1,5 @@
 use crate::config_dir::sheets_data_dir;
-use crate::theme::{Palette, Theme, ThemeSource, ThemeVariant};
+use crate::theme::{Palette, Period, Theme, ThemeSource, ThemeVariant};
 use std::fs;
 use std::path::PathBuf;
 use std::process::Command;
@@ -80,6 +80,23 @@ pub fn get_theme(id: &str) -> Result<Theme, String> {
         .into_iter()
         .find(|t| t.id == id)
         .ok_or_else(|| format!("no theme with id \"{id}\""))
+}
+
+pub fn list_themes_for_period(period: Period) -> Result<Vec<Theme>, String> {
+    Ok(list_themes()?.into_iter().filter(|t| period.accepts(t.variant)).collect())
+}
+
+fn palettes_match(a: &Palette, b: &Palette) -> bool {
+    a.background.eq_ignore_ascii_case(&b.background)
+        && a.foreground.eq_ignore_ascii_case(&b.foreground)
+        && a.ansi.iter().zip(b.ansi.iter()).all(|(x, y)| x.eq_ignore_ascii_case(y))
+}
+
+/// Reverse-matches a palette read from a live config file back to a known
+/// theme (built-in or user-installed). `Ok(None)` means the colors don't
+/// match anything Sheets knows about — a custom/hand-edited config.
+pub fn identify_theme(palette: &Palette) -> Result<Option<Theme>, String> {
+    Ok(list_themes()?.into_iter().find(|t| palettes_match(&t.palette, palette)))
 }
 
 pub fn remove_user_theme(id: &str) -> Result<(), String> {

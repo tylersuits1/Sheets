@@ -1,5 +1,5 @@
 use sheets_lib::apps::TerminalApp;
-use sheets_lib::theme::FontSettings;
+use sheets_lib::theme::{FontSettings, Period};
 use sheets_lib::theme_store;
 use std::fs;
 use std::sync::Mutex;
@@ -25,6 +25,10 @@ fn adapters_write_expected_config_files() {
     for app in TerminalApp::ALL {
         let adapter = app.adapter();
         assert!(!adapter.is_installed(), "{app:?} config should not exist yet");
+        assert!(
+            adapter.read_current_palette().unwrap().is_none(),
+            "{app:?} should report no palette before anything is applied"
+        );
 
         adapter.apply_theme(&theme).expect("apply_theme should succeed");
         adapter.apply_font(&font).expect("apply_font should succeed");
@@ -50,6 +54,19 @@ fn adapters_write_expected_config_files() {
                 "{app:?} should have exactly one managed-block marker after 3 applies, found {marker_count}:\n{contents}"
             );
         }
+
+        let read_back = adapter
+            .read_current_palette()
+            .unwrap()
+            .unwrap_or_else(|| panic!("{app:?} should report a full palette after apply_theme"));
+        assert_eq!(read_back.background.to_lowercase(), theme.palette.background.to_lowercase());
+        assert_eq!(read_back.foreground.to_lowercase(), theme.palette.foreground.to_lowercase());
+        let identified = theme_store::identify_theme(&read_back).unwrap();
+        assert_eq!(
+            identified.map(|t| t.id),
+            Some("tokyo-night".to_string()),
+            "{app:?} should reverse-match back to the tokyo-night theme"
+        );
 
         // Re-applying must not duplicate managed entries or corrupt the file.
         adapter.apply_theme(&theme).expect("second apply_theme should succeed");
@@ -83,4 +100,22 @@ fn ghostty_preserves_hand_written_lines_outside_the_managed_block() {
     assert!(contents.contains("background = fdf6e3"));
 
     let _ = fs::remove_dir_all(&scratch);
+}
+
+#[test]
+fn day_and_night_period_queries_filter_by_variant() {
+    let day = theme_store::list_themes_for_period(Period::Day).unwrap();
+    assert!(day.iter().any(|t| t.id == "solarized-light"), "Day should include the Light theme");
+    assert!(!day.iter().any(|t| t.id == "tokyo-night"), "Day should exclude the Dark theme");
+
+    let night = theme_store::list_themes_for_period(Period::Night).unwrap();
+    assert!(night.iter().any(|t| t.id == "tokyo-night"), "Night should include the Dark theme");
+    assert!(!night.iter().any(|t| t.id == "solarized-light"), "Night should exclude the Light theme");
+}
+
+#[test]
+fn identify_theme_returns_none_for_unrecognized_colors() {
+    let mut custom = theme_store::get_theme("tokyo-night").unwrap().palette;
+    custom.background = "ffffff".into();
+    assert!(theme_store::identify_theme(&custom).unwrap().is_none());
 }

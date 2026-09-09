@@ -2,7 +2,7 @@ mod alacritty;
 mod ghostty;
 mod kitty;
 
-use crate::theme::{FontSettings, Theme};
+use crate::theme::{FontSettings, Palette, Theme};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
@@ -41,6 +41,13 @@ pub trait ConfigAdapter {
     }
 
     fn read_current(&self) -> Result<CurrentConfig, String>;
+
+    /// The colors currently configured, if a full palette (background,
+    /// foreground, and all 16 ANSI colors) is set. Used to reverse-match
+    /// against known themes; `Ok(None)` means no theme has been applied
+    /// yet, or the config only sets some colors.
+    fn read_current_palette(&self) -> Result<Option<Palette>, String>;
+
     fn apply_theme(&self, theme: &Theme) -> Result<(), String>;
     fn apply_font(&self, font: &FontSettings) -> Result<(), String>;
     fn apply_opacity(&self, opacity: f32) -> Result<(), String>;

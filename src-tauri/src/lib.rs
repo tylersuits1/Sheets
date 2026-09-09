@@ -13,6 +13,8 @@ pub fn run() {
             commands::list_apps,
             commands::get_current_config,
             commands::list_themes,
+            commands::list_themes_for_period,
+            commands::get_current_theme,
             commands::apply_theme,
             commands::apply_font,
             commands::apply_opacity,

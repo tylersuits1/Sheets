@@ -1,13 +1,17 @@
 use super::{ConfigAdapter, CurrentConfig};
 use crate::config_dir::xdg_config_home;
 use crate::kv_config::{KvConfig, KvSyntax};
-use crate::theme::{FontSettings, Theme};
+use crate::theme::{FontSettings, Palette, Theme};
 use std::path::PathBuf;
 
 pub struct KittyAdapter;
 
 fn hex(value: &str) -> String {
     format!("#{value}")
+}
+
+fn unhex(value: &str) -> String {
+    value.trim_start_matches('#').to_string()
 }
 
 impl ConfigAdapter for KittyAdapter {
@@ -22,6 +26,31 @@ impl ConfigAdapter for KittyAdapter {
             font_size: cfg.get("font_size").and_then(|v| v.parse().ok()),
             opacity: cfg.get("background_opacity").and_then(|v| v.parse().ok()),
         })
+    }
+
+    fn read_current_palette(&self) -> Result<Option<Palette>, String> {
+        let cfg = KvConfig::load(&self.config_path()?, KvSyntax::Space)?;
+        let (background, foreground) = match (cfg.get("background"), cfg.get("foreground")) {
+            (Some(b), Some(f)) => (unhex(&b), unhex(&f)),
+            _ => return Ok(None),
+        };
+
+        let mut ansi: [String; 16] = core::array::from_fn(|_| String::new());
+        for (i, slot) in ansi.iter_mut().enumerate() {
+            match cfg.get(&format!("color{i}")) {
+                Some(v) => *slot = unhex(&v),
+                None => return Ok(None),
+            }
+        }
+
+        Ok(Some(Palette {
+            background,
+            foreground,
+            cursor: cfg.get("cursor").map(|v| unhex(&v)),
+            selection_background: cfg.get("selection_background").map(|v| unhex(&v)),
+            selection_foreground: cfg.get("selection_foreground").map(|v| unhex(&v)),
+            ansi,
+        }))
     }
 
     fn apply_theme(&self, theme: &Theme) -> Result<(), String> {

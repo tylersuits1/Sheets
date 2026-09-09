@@ -1,6 +1,6 @@
 use super::{ConfigAdapter, CurrentConfig};
 use crate::config_dir::xdg_config_home;
-use crate::theme::{FontSettings, Theme};
+use crate::theme::{FontSettings, Palette, Theme};
 use std::fs;
 use std::path::PathBuf;
 use toml_edit::{value, DocumentMut, Item, Table};
@@ -57,6 +57,14 @@ fn save_doc(path: &PathBuf, doc: &DocumentMut) -> Result<(), String> {
     fs::write(path, doc.to_string()).map_err(|e| e.to_string())
 }
 
+fn get_str(doc: &DocumentMut, path: &[&str]) -> Option<String> {
+    let mut item: &Item = doc.get(path[0])?;
+    for key in &path[1..] {
+        item = item.get(key)?;
+    }
+    item.as_str().map(|s| s.trim_start_matches('#').to_string())
+}
+
 impl ConfigAdapter for AlacrittyAdapter {
     fn config_path(&self) -> Result<PathBuf, String> {
         Ok(xdg_config_home()?.join("alacritty").join("alacritty.toml"))
@@ -82,6 +90,40 @@ impl ConfigAdapter for AlacrittyAdapter {
             .map(|v| v as f32);
 
         Ok(CurrentConfig { font_family, font_size, opacity })
+    }
+
+    fn read_current_palette(&self) -> Result<Option<Palette>, String> {
+        let doc = load_doc(&self.config_path()?)?;
+        let (background, foreground) = match (
+            get_str(&doc, &["colors", "primary", "background"]),
+            get_str(&doc, &["colors", "primary", "foreground"]),
+        ) {
+            (Some(b), Some(f)) => (b, f),
+            _ => return Ok(None),
+        };
+
+        let mut ansi: [String; 16] = core::array::from_fn(|_| String::new());
+        for (i, name) in ANSI_NAMES.iter().enumerate() {
+            match get_str(&doc, &["colors", "normal", name]) {
+                Some(v) => ansi[i] = v,
+                None => return Ok(None),
+            }
+        }
+        for (i, name) in ANSI_NAMES.iter().enumerate() {
+            match get_str(&doc, &["colors", "bright", name]) {
+                Some(v) => ansi[8 + i] = v,
+                None => return Ok(None),
+            }
+        }
+
+        Ok(Some(Palette {
+            background,
+            foreground,
+            cursor: get_str(&doc, &["colors", "cursor", "cursor"]),
+            selection_background: get_str(&doc, &["colors", "selection", "background"]),
+            selection_foreground: get_str(&doc, &["colors", "selection", "text"]),
+            ansi,
+        }))
     }
 
     fn apply_theme(&self, theme: &Theme) -> Result<(), String> {
