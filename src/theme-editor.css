@@ -57,6 +57,14 @@
   color: #555;
 }
 
+.color-row .color-swatch {
+  width: 20px;
+  height: 20px;
+  border-radius: 5px;
+  border: 1px solid rgba(0, 0, 0, 0.2);
+  flex-shrink: 0;
+}
+
 .color-row input[type="color"] {
   width: 32px;
   height: 28px;

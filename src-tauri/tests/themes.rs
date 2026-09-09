@@ -51,6 +51,64 @@ fn built_in_themes_cannot_be_exported() {
 }
 
 #[test]
+fn exported_theme_matches_the_documented_sheets_theme_json_shape() {
+    let _guard = ENV_LOCK.lock().unwrap();
+    let scratch = std::env::temp_dir().join(format!("sheets-export-shape-test-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&scratch);
+    std::env::set_var("XDG_CONFIG_HOME", &scratch);
+
+    let palette = Palette {
+        background: "1a1b26".into(),
+        foreground: "c0caf5".into(),
+        cursor: Some("c0caf5".into()),
+        selection_background: Some("283457".into()),
+        selection_foreground: None,
+        ansi: [
+            "15161e", "f7768e", "9ece6a", "e0af68", "7aa2f7", "bb9af7", "7dcfff", "a9b1d6", "414868", "f7768e",
+            "9ece6a", "e0af68", "7aa2f7", "bb9af7", "7dcfff", "c0caf5",
+        ]
+        .map(String::from),
+    };
+    theme_store::save_user_theme("Tokyo Night Example".into(), ThemeVariant::Dark, palette).unwrap();
+    let exported = theme_store::export_theme_json("tokyo-night-example").unwrap();
+
+    // Kept in sync with the README's "Theme repo format" example: same key
+    // names, key order, and null handling for an unset optional color.
+    let expected = r#"{
+  "name": "Tokyo Night Example",
+  "variant": "dark",
+  "palette": {
+    "background": "1a1b26",
+    "foreground": "c0caf5",
+    "cursor": "c0caf5",
+    "selection_background": "283457",
+    "selection_foreground": null,
+    "ansi": [
+      "15161e",
+      "f7768e",
+      "9ece6a",
+      "e0af68",
+      "7aa2f7",
+      "bb9af7",
+      "7dcfff",
+      "a9b1d6",
+      "414868",
+      "f7768e",
+      "9ece6a",
+      "e0af68",
+      "7aa2f7",
+      "bb9af7",
+      "7dcfff",
+      "c0caf5"
+    ]
+  }
+}"#;
+    assert_eq!(exported, expected);
+
+    let _ = std::fs::remove_dir_all(&scratch);
+}
+
+#[test]
 fn empty_theme_name_is_rejected() {
     let _guard = ENV_LOCK.lock().unwrap();
     let scratch = std::env::temp_dir().join(format!("sheets-create-theme-empty-{}", std::process::id()));

@@ -104,6 +104,88 @@ fn ghostty_preserves_hand_written_lines_outside_the_managed_block() {
 }
 
 #[test]
+fn ghostty_apply_theme_clears_a_conflicting_hand_written_theme_directive() {
+    let _guard = ENV_LOCK.lock().unwrap();
+    let scratch = std::env::temp_dir().join(format!("sheets-theme-directive-test-{}", std::process::id()));
+    let _ = fs::remove_dir_all(&scratch);
+    let ghostty_dir = scratch.join("ghostty");
+    fs::create_dir_all(&ghostty_dir).unwrap();
+    // Ghostty's own `theme` directive (commonly auto-set to follow macOS's
+    // system appearance) loads a whole named theme and overrides explicit
+    // background/foreground/palette settings regardless of file order -
+    // applying a Sheets theme has to actually take visible effect over it.
+    fs::write(
+        ghostty_dir.join("config"),
+        "theme = dark:Apple System Colors, light:Apple System Colors Light\nfont-family = Menlo\n",
+    )
+    .unwrap();
+    std::env::set_var("XDG_CONFIG_HOME", &scratch);
+
+    let theme = theme_store::get_theme("tokyo-night").unwrap();
+    TerminalApp::Ghostty.adapter().apply_theme(&theme).unwrap();
+
+    let contents = fs::read_to_string(ghostty_dir.join("config")).unwrap();
+    assert!(!contents.contains("theme ="), "the conflicting theme directive should be removed:\n{contents}");
+    assert!(contents.contains("font-family = Menlo"), "unrelated hand-written lines should survive");
+    assert!(contents.contains("background = 1a1b26"));
+
+    let _ = fs::remove_dir_all(&scratch);
+}
+
+#[test]
+fn ghostty_apply_theme_overrides_a_hand_written_palette_ghostty_actually_keeps() {
+    let _guard = ENV_LOCK.lock().unwrap();
+    let scratch = std::env::temp_dir().join(format!("sheets-first-wins-test-{}", std::process::id()));
+    let _ = fs::remove_dir_all(&scratch);
+    let ghostty_dir = scratch.join("ghostty");
+    fs::create_dir_all(&ghostty_dir).unwrap();
+    // Confirmed against a real Ghostty install: when a scalar key like
+    // `background` is defined twice, Ghostty renders using the FIRST
+    // definition, not the last. A hand-written palette from before Sheets
+    // was ever used (like a dotfiles-managed config) must not survive
+    // alongside Sheets' managed block, or Sheets' apply is silently a no-op.
+    let hand_written = "\
+macos-titlebar-style = native
+background-opacity = 0.8
+
+foreground = #d3c6aa
+background = #1e2326
+cursor-color = #e69875
+palette = 0=#7a8478
+palette = 1=#e67e80
+palette = 2=#a7c080
+palette = 3=#dbbc7f
+palette = 4=#7fbbb3
+palette = 5=#d699b6
+palette = 6=#83c092
+palette = 7=#f2efdf
+palette = 8=#a6b0a0
+palette = 9=#f85552
+palette = 10=#8da101
+palette = 11=#dfa000
+palette = 12=#3a94c5
+palette = 13=#df69ba
+palette = 14=#35a77c
+palette = 15=#fffbef
+";
+    fs::write(ghostty_dir.join("config"), hand_written).unwrap();
+    std::env::set_var("XDG_CONFIG_HOME", &scratch);
+
+    let theme = theme_store::get_theme("tokyo-night").unwrap();
+    TerminalApp::Ghostty.adapter().apply_theme(&theme).unwrap();
+
+    let contents = fs::read_to_string(ghostty_dir.join("config")).unwrap();
+    let count_key = |key: &str| contents.lines().filter(|l| l.trim_start().starts_with(&format!("{key} = "))).count();
+    assert_eq!(count_key("background"), 1, "only one background definition should remain:\n{contents}");
+    assert_eq!(count_key("foreground"), 1, "only one foreground definition should remain:\n{contents}");
+    assert!(!contents.contains("#1e2326"), "the old hand-written background must be gone:\n{contents}");
+    assert!(contents.contains("background = 1a1b26"), "the new theme's background must be present:\n{contents}");
+    assert!(contents.contains("macos-titlebar-style = native"), "unrelated hand-written settings must survive");
+
+    let _ = fs::remove_dir_all(&scratch);
+}
+
+#[test]
 fn day_and_night_period_queries_filter_by_variant() {
     let day = theme_store::list_themes_for_period(Period::Day).unwrap();
     assert!(day.iter().any(|t| t.id == "solarized-light"), "Day should include the Light theme");

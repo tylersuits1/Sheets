@@ -1,5 +1,6 @@
-use super::{ConfigAdapter, CurrentConfig};
+use super::{ConfigAdapter, CurrentConfig, TerminalApp};
 use crate::config_dir::xdg_config_home;
+use crate::config_override;
 use crate::kv_config::{KvConfig, KvSyntax};
 use crate::theme::{FontSettings, Palette, Theme};
 use std::path::PathBuf;
@@ -16,6 +17,9 @@ fn unhex(value: &str) -> String {
 
 impl ConfigAdapter for KittyAdapter {
     fn config_path(&self) -> Result<PathBuf, String> {
+        if let Some(p) = config_override::get(TerminalApp::Kitty)? {
+            return Ok(p);
+        }
         Ok(xdg_config_home()?.join("kitty").join("kitty.conf"))
     }
 

@@ -68,15 +68,24 @@ impl KvConfig {
         Ok(Self { prefix_lines: lines, managed_lines, syntax })
     }
 
-    /// Removes every managed line for `key` (there may be more than one,
-    /// e.g. Ghostty's repeated `palette` key).
+    /// Removes every occurrence of `key`, in both the managed block and the
+    /// user's own hand-written lines above it. Ghostty (confirmed against a
+    /// real config) keeps the *first* definition of a duplicated scalar key,
+    /// not the last — so if a hand-written `background = ...` from before
+    /// Sheets existed is left in place, appending a new one in the managed
+    /// block at the end of the file is silently ignored. Once Sheets manages
+    /// a key, its old hand-written value has to go, leaving exactly one
+    /// definition (in the managed block) so there's no ordering ambiguity.
     pub fn unset(&mut self, key: &str) {
         let syntax = self.syntax;
+        self.prefix_lines
+            .retain(|l| syntax.parse(l).map(|(k, _)| k).as_deref() != Some(key));
         self.managed_lines
             .retain(|l| syntax.parse(l).map(|(k, _)| k).as_deref() != Some(key));
     }
 
-    /// Replaces every managed occurrence of `key` with a single new value.
+    /// Replaces every occurrence of `key` (managed or hand-written) with a
+    /// single new value in the managed block.
     pub fn set(&mut self, key: &str, value: &str) {
         self.unset(key);
         self.managed_lines.push(self.syntax.format(key, value));

@@ -1,10 +1,12 @@
 use crate::apps::{CurrentConfig, TerminalApp};
 use crate::backup;
+use crate::config_override;
 use crate::day_night;
 use crate::fonts;
 use crate::theme::{FontSettings, Palette, Period, Theme, ThemeVariant};
 use crate::theme_store;
 use serde::Serialize;
+use std::path::PathBuf;
 
 #[derive(Serialize)]
 pub struct AppInfo {
@@ -31,6 +33,19 @@ pub fn list_apps() -> Vec<AppInfo> {
 #[tauri::command]
 pub fn get_current_config(app: TerminalApp) -> Result<CurrentConfig, String> {
     app.adapter().read_current()
+}
+
+/// Called after the user picks a config file by hand (via a native "Locate
+/// config file…" dialog) for an app Sheets couldn't auto-detect, e.g. a
+/// custom dotfiles setup that doesn't live at the usual XDG path.
+#[tauri::command]
+pub fn set_config_path(app: TerminalApp, path: String) -> Result<(), String> {
+    config_override::set(app, &PathBuf::from(path))
+}
+
+#[tauri::command]
+pub fn clear_config_path(app: TerminalApp) -> Result<(), String> {
+    config_override::clear(app)
 }
 
 #[tauri::command]
@@ -124,11 +139,6 @@ pub fn can_undo(app: TerminalApp) -> bool {
 pub fn undo_last_change(app: TerminalApp) -> Result<(), String> {
     let path = app.adapter().config_path()?;
     backup::undo(app, &path)
-}
-
-#[tauri::command]
-pub fn install_theme_from_git(git_url: String) -> Result<Theme, String> {
-    theme_store::install_theme_from_git(&git_url)
 }
 
 #[tauri::command]

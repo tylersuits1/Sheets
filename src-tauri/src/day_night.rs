@@ -58,9 +58,7 @@ pub fn set_night_theme(app: TerminalApp, theme_id: String) -> Result<(), String>
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::Mutex;
-
-    static ENV_LOCK: Mutex<()> = Mutex::new(());
+    use crate::test_support::ENV_LOCK;
 
     #[test]
     fn day_and_night_are_independent_and_persist_separately_per_app() {

@@ -1,8 +1,8 @@
 # Sheets
 
-A desktop app for managing terminal themes, fonts, and transparency across
+A desktop app for managing terminal themes, fonts, and opacity across
 Ghostty, Kitty, and Alacritty — with color-wheel pickers, live preview, and
-one-click theme install from git repos.
+theme export for sharing your own creations.
 
 ## Status
 
@@ -11,11 +11,11 @@ Early scaffolding — not yet functional.
 ## Planned features
 
 - Color wheel / HEX input for foreground, background, and palette colors
-- Transparency slider
+- Opacity slider
 - Font family + size picker
 - Live preview pane (sample code block + pixelated splash icon recoloring)
-- Install new themes from a git URL, tracked as "user installed" vs.
-  pre-installed
+- Create custom themes by hand and export them as `sheets-theme.json`,
+  tracked as "user installed" vs. pre-installed
 - Tag themes as Dark / Light / Both
 - Cross-platform: macOS and Linux (Omarchy), auto-detecting each app's
   config file location
@@ -25,8 +25,9 @@ Early scaffolding — not yet functional.
 
 ## Theme repo format
 
-Installing a theme from git (`install_theme_from_git`) clones the repo and
-reads a `sheets-theme.json` at its root:
+File > Export Theme writes a user-created theme as `sheets-theme.json`, meant
+to sit at the root of a git repo (or wherever you'd like to share it) so
+others can pick it up:
 
 ```json
 {
@@ -57,8 +58,7 @@ reads a `sheets-theme.json` at its root:
   optional.
 
 This is Sheets' own format, not a wrapper around an existing standard
-(base16, iTerm color schemes, etc.) — repos in other formats aren't
-readable yet.
+(base16, iTerm color schemes, etc.).
 
 ## Stack
 

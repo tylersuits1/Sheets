@@ -2,12 +2,24 @@ pub mod apps;
 pub mod backup;
 mod commands;
 pub mod config_dir;
+mod config_override;
 mod day_night;
 mod fonts;
 mod ghostty_import;
 mod kv_config;
 pub mod theme;
 pub mod theme_store;
+
+// Every unit test that sets the process-global `XDG_CONFIG_HOME` env var
+// (in day_night, config_override, etc.) must serialize on this ONE lock, not
+// a module-local one — cargo runs unit tests in the same binary on separate
+// threads, so two different `Mutex`es don't actually prevent one test's env
+// var from stomping another's mid-run.
+#[cfg(test)]
+pub(crate) mod test_support {
+    use std::sync::Mutex;
+    pub static ENV_LOCK: Mutex<()> = Mutex::new(());
+}
 
 use tauri::menu::{MenuBuilder, MenuItemBuilder, SubmenuBuilder};
 use tauri::{Manager, WebviewUrl, WebviewWindowBuilder};
@@ -72,6 +84,8 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::list_apps,
             commands::get_current_config,
+            commands::set_config_path,
+            commands::clear_config_path,
             commands::list_themes,
             commands::list_themes_for_period,
             commands::get_current_theme,
@@ -84,7 +98,6 @@ pub fn run() {
             commands::apply_opacity,
             commands::can_undo,
             commands::undo_last_change,
-            commands::install_theme_from_git,
             commands::remove_user_theme,
             commands::create_custom_theme,
             commands::list_exportable_themes,

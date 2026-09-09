@@ -43,6 +43,15 @@ function makeColorField(label: string, initialHex: string): ColorField {
   labelEl.className = "color-label";
   labelEl.textContent = label;
 
+  // WKWebView (Tauri's macOS webview) has a known bug where setting
+  // `<input type="color">`.value from JS updates the value but doesn't
+  // repaint the little swatch — so typing a hex code visually looks like
+  // nothing happened even though it worked. This swatch is a plain div
+  // whose background-color we set directly, so it always reflects reality.
+  const swatch = document.createElement("span");
+  swatch.className = "color-swatch";
+  swatch.style.backgroundColor = `#${initialHex}`;
+
   const colorInput = document.createElement("input");
   colorInput.type = "color";
   colorInput.value = `#${initialHex}`;
@@ -55,14 +64,16 @@ function makeColorField(label: string, initialHex: string): ColorField {
 
   colorInput.addEventListener("input", () => {
     textInput.value = colorInput.value.replace("#", "");
+    swatch.style.backgroundColor = colorInput.value;
   });
   textInput.addEventListener("input", () => {
     if (/^[0-9a-fA-F]{6}$/.test(textInput.value)) {
       colorInput.value = `#${textInput.value}`;
+      swatch.style.backgroundColor = `#${textInput.value}`;
     }
   });
 
-  row.append(labelEl, colorInput, textInput);
+  row.append(labelEl, swatch, colorInput, textInput);
 
   return {
     row,
@@ -70,6 +81,7 @@ function makeColorField(label: string, initialHex: string): ColorField {
     set: (hex: string) => {
       textInput.value = hex;
       colorInput.value = `#${hex}`;
+      swatch.style.backgroundColor = `#${hex}`;
     },
   };
 }

@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import { open } from "@tauri-apps/plugin-dialog";
 
 type TerminalApp = "ghostty" | "kitty" | "alacritty";
 type Period = "day" | "night";
@@ -49,7 +50,7 @@ const APP_LABELS: Record<TerminalApp, string> = {
 let apps: AppInfo[] = [];
 let selectedApp: TerminalApp = "ghostty";
 let currentTheme: Theme | null = null;
-let periodFilter: "all" | Period = "all";
+let periodFilter: "both" | Period = "both";
 let lastThemes: Theme[] = [];
 
 const appTabsEl = document.querySelector<HTMLElement>("#app-tabs")!;
@@ -64,16 +65,15 @@ const previewBodyEl = document.querySelector<HTMLElement>("#preview-body")!;
 const fontForm = document.querySelector<HTMLFormElement>("#font-form")!;
 const fontFamilySelect = document.querySelector<HTMLSelectElement>("#font-family")!;
 const fontSizeInput = document.querySelector<HTMLInputElement>("#font-size")!;
+const fontStatusEl = document.querySelector<HTMLElement>("#font-status")!;
 const opacitySlider = document.querySelector<HTMLInputElement>("#opacity-slider")!;
 const opacityValueEl = document.querySelector<HTMLElement>("#opacity-value")!;
 const opacityApplyBtn = document.querySelector<HTMLButtonElement>("#opacity-apply")!;
-const installForm = document.querySelector<HTMLFormElement>("#install-form")!;
-const installUrlInput = document.querySelector<HTMLInputElement>("#install-url")!;
-const installStatusEl = document.querySelector<HTMLElement>("#install-status")!;
+const opacityStatusEl = document.querySelector<HTMLElement>("#opacity-status")!;
 
-function setInstallStatus(message: string, kind: "success" | "error" | "" = "") {
-  installStatusEl.textContent = message;
-  installStatusEl.className = `status-message${kind ? ` ${kind}` : ""}`;
+function setStatus(el: HTMLElement, message: string, kind: "success" | "error" | "" = "") {
+  el.textContent = message;
+  el.className = `status-message${kind ? ` ${kind}` : ""}`;
 }
 
 function errorMessage(err: unknown): string {
@@ -146,7 +146,7 @@ async function refreshStatus() {
       invoke<DayNightThemes>("get_day_night_themes", { app: selectedApp }),
     ]);
     currentTheme = theme;
-    renderStatus(config, theme, undoable, dayNight);
+    renderStatus(config, undoable, dayNight);
     selectDefaultTheme();
 
     if (config.font_family) setFontFamilySelection(config.font_family);
@@ -164,7 +164,7 @@ async function refreshStatus() {
   }
 }
 
-function renderStatus(config: CurrentConfig, theme: Theme | null, undoable: boolean, dayNight: DayNightThemes) {
+function renderStatus(config: CurrentConfig, undoable: boolean, dayNight: DayNightThemes) {
   const info = apps.find((a) => a.app === selectedApp);
   statusPanelEl.innerHTML = "";
 
@@ -172,12 +172,25 @@ function renderStatus(config: CurrentConfig, theme: Theme | null, undoable: bool
   heading.textContent = APP_LABELS[selectedApp];
   statusPanelEl.appendChild(heading);
 
+  if (info && !info.installed) {
+    const notice = document.createElement("p");
+    notice.className = "status-message error";
+    notice.textContent = `Couldn't find a config file for ${APP_LABELS[selectedApp]} at ${info.config_path ?? "the expected location"}.`;
+    statusPanelEl.appendChild(notice);
+
+    const locateBtn = document.createElement("button");
+    locateBtn.type = "button";
+    locateBtn.textContent = "Locate config file…";
+    locateBtn.addEventListener("click", locateConfigFile);
+    statusPanelEl.appendChild(locateBtn);
+    return;
+  }
+
   const dl = document.createElement("dl");
   dl.className = "status-grid";
 
   const rows: [string, string][] = [
     ["Config", info?.config_path ?? "unknown"],
-    ["All", theme ? theme.name : "not applied by Sheets yet"],
     ["Day", dayNight.day ? dayNight.day.name : "not set"],
     ["Night", dayNight.night ? dayNight.night.name : "not set"],
     ["Font", config.font_family ? `${config.font_family} @ ${config.font_size ?? "?"}` : "not set"],
@@ -208,10 +221,22 @@ function renderStatus(config: CurrentConfig, theme: Theme | null, undoable: bool
   statusPanelEl.appendChild(undoBtn);
 }
 
+async function locateConfigFile() {
+  const path = await open({ multiple: false, title: `Locate ${APP_LABELS[selectedApp]}'s config file` });
+  if (!path || Array.isArray(path)) return;
+  try {
+    await invoke("set_config_path", { app: selectedApp, path });
+    await loadApps();
+    await refreshStatus();
+  } catch (err) {
+    alert(`Couldn't use that file: ${errorMessage(err)}`);
+  }
+}
+
 async function loadThemes() {
   try {
     const themes =
-      periodFilter === "all"
+      periodFilter === "both"
         ? await invoke<Theme[]>("list_themes")
         : await invoke<Theme[]>("list_themes_for_period", { period: periodFilter });
     lastThemes = themes;
@@ -255,18 +280,19 @@ function onThemeSelectionChanged() {
   renderPreview(theme);
 }
 
-const PERIOD_LABEL: Record<"all" | Period, string> = { all: "All", day: "Day", night: "Night" };
+const PERIOD_LABEL: Record<"both" | Period, string> = { both: "Both", day: "Day", night: "Night" };
 
-// Applying while the Day/Night tab is active also designates the theme for
-// that period, matching whichever tab you were browsing when you hit Apply.
+// Applying designates the theme for whichever tab you were browsing when
+// you hit Apply: Day/Night sets just that one, Both sets both at once.
 async function applyTheme() {
   const theme = selectedThemeInDropdown();
   if (!theme) return;
   try {
     await invoke("apply_theme", { app: selectedApp, themeId: theme.id });
-    if (periodFilter === "day") {
+    if (periodFilter === "both" || periodFilter === "day") {
       await invoke("set_day_theme", { app: selectedApp, themeId: theme.id });
-    } else if (periodFilter === "night") {
+    }
+    if (periodFilter === "both" || periodFilter === "night") {
       await invoke("set_night_theme", { app: selectedApp, themeId: theme.id });
     }
     await refreshStatus();
@@ -397,7 +423,7 @@ window.addEventListener("DOMContentLoaded", async () => {
 
   periodFilterEl.addEventListener("click", (e) => {
     const target = e.target as HTMLElement;
-    const period = target.dataset.period as "all" | Period | undefined;
+    const period = target.dataset.period as "both" | Period | undefined;
     if (!period) return;
     periodFilter = period;
     for (const btn of periodFilterEl.querySelectorAll("button")) {
@@ -418,31 +444,24 @@ window.addEventListener("DOMContentLoaded", async () => {
         font: { family: fontFamilySelect.value, size: parseFloat(fontSizeInput.value) },
       });
       await refreshStatus();
+      setStatus(fontStatusEl, `Font set to ${fontFamilySelect.value} @ ${fontSizeInput.value}pt.`, "success");
     } catch (err) {
-      alert(`Couldn't apply font: ${errorMessage(err)}`);
+      setStatus(fontStatusEl, `Couldn't apply font: ${errorMessage(err)}`, "error");
     }
   });
 
-  opacitySlider.addEventListener("input", updateOpacityLabel);
+  opacitySlider.addEventListener("input", () => {
+    updateOpacityLabel();
+    setStatus(opacityStatusEl, "", "");
+  });
   opacityApplyBtn.addEventListener("click", async () => {
     try {
+      const percent = Math.round(Number(opacitySlider.value) * 100);
       await invoke("apply_opacity", { app: selectedApp, opacity: parseFloat(opacitySlider.value) });
       await refreshStatus();
+      setStatus(opacityStatusEl, `Opacity set to ${percent}%.`, "success");
     } catch (err) {
-      alert(`Couldn't apply opacity: ${errorMessage(err)}`);
-    }
-  });
-
-  installForm.addEventListener("submit", async (e) => {
-    e.preventDefault();
-    setInstallStatus("Cloning…");
-    try {
-      const theme = await invoke<Theme>("install_theme_from_git", { gitUrl: installUrlInput.value });
-      setInstallStatus(`Installed "${theme.name}".`, "success");
-      installUrlInput.value = "";
-      await loadThemes();
-    } catch (err) {
-      setInstallStatus(errorMessage(err), "error");
+      setStatus(opacityStatusEl, `Couldn't apply opacity: ${errorMessage(err)}`, "error");
     }
   });
 });

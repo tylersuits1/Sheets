@@ -1,5 +1,6 @@
-use super::{ConfigAdapter, CurrentConfig};
+use super::{ConfigAdapter, CurrentConfig, TerminalApp};
 use crate::config_dir::xdg_config_home;
+use crate::config_override;
 use crate::kv_config::{KvConfig, KvSyntax};
 use crate::theme::{FontSettings, Palette, Theme};
 use std::path::PathBuf;
@@ -8,6 +9,9 @@ pub struct GhosttyAdapter;
 
 impl ConfigAdapter for GhosttyAdapter {
     fn config_path(&self) -> Result<PathBuf, String> {
+        if let Some(p) = config_override::get(TerminalApp::Ghostty)? {
+            return Ok(p);
+        }
         Ok(xdg_config_home()?.join("ghostty").join("config"))
     }
 
@@ -54,6 +58,13 @@ impl ConfigAdapter for GhosttyAdapter {
     fn apply_theme(&self, theme: &Theme) -> Result<(), String> {
         let path = self.config_path()?;
         let mut cfg = KvConfig::load(&path, KvSyntax::Equals)?;
+
+        // Ghostty's `theme` directive (e.g. `theme = dark:X,light:Y`, often
+        // auto-set to follow macOS's system appearance) loads a whole named
+        // theme and overrides explicit background/foreground/palette values.
+        // Since applying a Sheets theme is an explicit request to control
+        // colors, this has to be cleared or it'll keep winning.
+        cfg.unset("theme");
 
         cfg.set("background", &theme.palette.background);
         cfg.set("foreground", &theme.palette.foreground);

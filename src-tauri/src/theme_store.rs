@@ -2,7 +2,6 @@ use crate::config_dir::sheets_data_dir;
 use crate::theme::{Palette, Period, Theme, ThemeSource, ThemeVariant};
 use std::fs;
 use std::path::PathBuf;
-use std::process::Command;
 
 fn manifest_path() -> Result<PathBuf, String> {
     Ok(sheets_data_dir()?.join("themes.json"))
@@ -128,10 +127,9 @@ pub fn save_user_theme(name: String, variant: ThemeVariant, palette: Palette) ->
 }
 
 /// Serializes a user-created/installed theme back into the `sheets-theme.json`
-/// shape, so it can be saved to a file and pushed to a git repo for others to
-/// install via `install_theme_from_git`. Built-in themes (including ones
-/// imported from Ghostty) aren't exportable — there's nothing of the user's
-/// to hand off.
+/// shape, so it can be saved to a file and shared for others to install.
+/// Built-in themes (including ones imported from Ghostty) aren't exportable —
+/// there's nothing of the user's to hand off.
 pub fn export_theme_json(id: &str) -> Result<String, String> {
     let theme = get_theme(id)?;
     if theme.source != ThemeSource::UserInstalled {
@@ -141,61 +139,15 @@ pub fn export_theme_json(id: &str) -> Result<String, String> {
     serde_json::to_string_pretty(&manifest).map_err(|e| e.to_string())
 }
 
-/// The `sheets-theme.json` shape expected at the root of a theme repo, as
-/// documented in the README's "Theme repo format" section — keep the two in
-/// sync (`theme_manifest_matches_documented_format` checks the parsing side).
-#[derive(serde::Serialize, serde::Deserialize)]
+/// The `sheets-theme.json` shape a theme repo is documented to have, as
+/// described in the README's "Theme repo format" section — keep the two in
+/// sync (`exported_theme_matches_the_documented_sheets_theme_json_shape` in
+/// tests/themes.rs checks this).
+#[derive(serde::Serialize)]
 struct ThemeManifest {
     name: String,
     variant: ThemeVariant,
     palette: Palette,
-}
-
-fn parse_theme_manifest(contents: &str, git_url: &str) -> Result<Theme, String> {
-    let parsed: ThemeManifest = serde_json::from_str(contents).map_err(|e| e.to_string())?;
-    Ok(Theme {
-        id: slugify(&parsed.name),
-        name: parsed.name,
-        variant: parsed.variant,
-        source: ThemeSource::UserInstalled,
-        git_url: Some(git_url.to_string()),
-        palette: parsed.palette,
-    })
-}
-
-/// Clones `git_url` into a scratch directory and reads a `sheets-theme.json`
-/// file from its root. Repos in other formats (base16, iTerm color schemes,
-/// etc.) aren't supported — `sheets-theme.json` is Sheets' own format, not a
-/// wrapper around an existing standard.
-pub fn install_theme_from_git(git_url: &str) -> Result<Theme, String> {
-    let scratch = std::env::temp_dir().join(format!("sheets-theme-install-{}", std::process::id()));
-    if scratch.exists() {
-        fs::remove_dir_all(&scratch).map_err(|e| e.to_string())?;
-    }
-
-    let status = Command::new("git")
-        .args(["clone", "--depth", "1", git_url, &scratch.to_string_lossy()])
-        .status()
-        .map_err(|e| format!("failed to run git: {e}"))?;
-    if !status.success() {
-        return Err(format!("git clone of {git_url} failed"));
-    }
-
-    let manifest = scratch.join("sheets-theme.json");
-    let result = (|| {
-        let contents = fs::read_to_string(&manifest)
-            .map_err(|_| "repo has no sheets-theme.json at its root".to_string())?;
-        let theme = parse_theme_manifest(&contents, git_url)?;
-
-        let mut themes = load_user_themes()?;
-        themes.retain(|t| t.id != theme.id);
-        themes.push(theme.clone());
-        save_user_themes(&themes)?;
-        Ok(theme)
-    })();
-
-    let _ = fs::remove_dir_all(&scratch);
-    result
 }
 
 pub(crate) fn slugify(name: &str) -> String {
@@ -207,42 +159,4 @@ pub(crate) fn slugify(name: &str) -> String {
         .filter(|s| !s.is_empty())
         .collect::<Vec<_>>()
         .join("-")
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    // Kept byte-for-byte in sync with the example in the README's
-    // "Theme repo format" section.
-    const README_EXAMPLE: &str = r#"{
-  "name": "Tokyo Night",
-  "variant": "dark",
-  "palette": {
-    "background": "1a1b26",
-    "foreground": "c0caf5",
-    "cursor": "c0caf5",
-    "selection_background": "283457",
-    "selection_foreground": null,
-    "ansi": [
-      "15161e", "f7768e", "9ece6a", "e0af68",
-      "7aa2f7", "bb9af7", "7dcfff", "a9b1d6",
-      "414868", "f7768e", "9ece6a", "e0af68",
-      "7aa2f7", "bb9af7", "7dcfff", "c0caf5"
-    ]
-  }
-}"#;
-
-    #[test]
-    fn theme_manifest_matches_documented_format() {
-        let theme = parse_theme_manifest(README_EXAMPLE, "https://example.com/some-theme.git").unwrap();
-        assert_eq!(theme.id, "tokyo-night");
-        assert_eq!(theme.name, "Tokyo Night");
-        assert_eq!(theme.variant, ThemeVariant::Dark);
-        assert_eq!(theme.source, ThemeSource::UserInstalled);
-        assert_eq!(theme.git_url.as_deref(), Some("https://example.com/some-theme.git"));
-        assert_eq!(theme.palette.background, "1a1b26");
-        assert_eq!(theme.palette.selection_foreground, None);
-        assert_eq!(theme.palette.ansi[15], "c0caf5");
-    }
 }

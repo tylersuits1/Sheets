@@ -12,7 +12,7 @@
     <main class="app">
       <header>
         <h1>Sheets</h1>
-        <p class="subtitle">Themes, fonts, and transparency for your terminal.</p>
+        <p class="subtitle">Themes, fonts, and opacity for your terminal.</p>
       </header>
 
       <nav class="app-tabs" id="app-tabs"></nav>
@@ -23,7 +23,7 @@
         <div class="panel-header">
           <h2>Themes</h2>
           <div class="period-filter" id="period-filter">
-            <button type="button" data-period="all" class="active">All</button>
+            <button type="button" data-period="both" class="active">Both</button>
             <button type="button" data-period="day">Day</button>
             <button type="button" data-period="night">Night</button>
           </div>
@@ -44,6 +44,7 @@
           <input id="font-size" type="number" min="6" max="72" step="0.5" placeholder="Size" required />
           <button type="submit">Apply font</button>
         </form>
+        <p class="status-message" id="font-status"></p>
       </section>
 
       <section class="panel">
@@ -60,7 +61,7 @@
       </section>
 
       <section class="panel">
-        <h2>Transparency</h2>
+        <h2>Opacity</h2>
         <p class="hint">
           Not reflected in the preview above — that's a flat mock, not a real transparent window. As a rough guide:
           100% is opaque, 85–95% is a subtle tint, 60–80% is clearly see-through, and below 50% is quite transparent.
@@ -70,16 +71,9 @@
           <span id="opacity-value">100%</span>
           <button type="button" id="opacity-apply">Apply</button>
         </div>
+        <p class="status-message" id="opacity-status"></p>
       </section>
 
-      <section class="panel">
-        <h2>Install a theme from git</h2>
-        <form id="install-form" class="inline-form">
-          <input id="install-url" type="url" placeholder="https://github.com/you/theme-repo.git" required />
-          <button type="submit">Install</button>
-        </form>
-        <p id="install-status" class="status-message"></p>
-      </section>
     </main>
   </body>
 </html>

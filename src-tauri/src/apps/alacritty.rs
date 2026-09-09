@@ -1,5 +1,6 @@
-use super::{ConfigAdapter, CurrentConfig};
+use super::{ConfigAdapter, CurrentConfig, TerminalApp};
 use crate::config_dir::xdg_config_home;
+use crate::config_override;
 use crate::theme::{FontSettings, Palette, Theme};
 use std::fs;
 use std::path::PathBuf;
@@ -67,6 +68,9 @@ fn get_str(doc: &DocumentMut, path: &[&str]) -> Option<String> {
 
 impl ConfigAdapter for AlacrittyAdapter {
     fn config_path(&self) -> Result<PathBuf, String> {
+        if let Some(p) = config_override::get(TerminalApp::Alacritty)? {
+            return Ok(p);
+        }
         Ok(xdg_config_home()?.join("alacritty").join("alacritty.toml"))
     }
 
