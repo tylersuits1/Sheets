@@ -1,5 +1,7 @@
 use crate::apps::{CurrentConfig, TerminalApp};
 use crate::backup;
+use crate::day_night;
+use crate::fonts;
 use crate::theme::{FontSettings, Palette, Period, Theme, ThemeVariant};
 use crate::theme_store;
 use serde::Serialize;
@@ -52,12 +54,51 @@ pub fn get_current_theme(app: TerminalApp) -> Result<Option<Theme>, String> {
     }
 }
 
+#[derive(Serialize)]
+pub struct DayNightThemes {
+    day: Option<Theme>,
+    night: Option<Theme>,
+}
+
+/// The themes designated for day/night use on `app`, separate from
+/// whichever theme is actually applied right now. Either side is `None`
+/// until the user sets one via `set_day_theme`/`set_night_theme`.
+#[tauri::command]
+pub fn get_day_night_themes(app: TerminalApp) -> Result<DayNightThemes, String> {
+    let day = match day_night::get_day_theme_id(app)? {
+        Some(id) => theme_store::get_theme(&id).ok(),
+        None => None,
+    };
+    let night = match day_night::get_night_theme_id(app)? {
+        Some(id) => theme_store::get_theme(&id).ok(),
+        None => None,
+    };
+    Ok(DayNightThemes { day, night })
+}
+
+#[tauri::command]
+pub fn set_day_theme(app: TerminalApp, theme_id: String) -> Result<(), String> {
+    theme_store::get_theme(&theme_id)?;
+    day_night::set_day_theme(app, theme_id)
+}
+
+#[tauri::command]
+pub fn set_night_theme(app: TerminalApp, theme_id: String) -> Result<(), String> {
+    theme_store::get_theme(&theme_id)?;
+    day_night::set_night_theme(app, theme_id)
+}
+
 #[tauri::command]
 pub fn apply_theme(app: TerminalApp, theme_id: String) -> Result<(), String> {
     let theme = theme_store::get_theme(&theme_id)?;
     let adapter = app.adapter();
     backup::snapshot(app, &adapter.config_path()?)?;
     adapter.apply_theme(&theme)
+}
+
+#[tauri::command]
+pub fn list_font_families() -> Result<Vec<String>, String> {
+    fonts::list_font_families()
 }
 
 #[tauri::command]

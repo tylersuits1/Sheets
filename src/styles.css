@@ -246,6 +246,12 @@ h1 {
   min-height: 1.2em;
 }
 
+.hint {
+  font-size: 0.85em;
+  color: #777;
+  margin: 0 0 0.75rem;
+}
+
 .status-message.error {
   color: #c92a2a;
 }
@@ -286,7 +292,8 @@ button.danger:hover {
     background-color: #1f1f1f;
   }
 
-  .subtitle {
+  .subtitle,
+  .hint {
     color: #aaa;
   }
 

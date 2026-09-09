@@ -35,6 +35,11 @@ interface Theme {
   palette: Palette;
 }
 
+interface DayNightThemes {
+  day: Theme | null;
+  night: Theme | null;
+}
+
 const APP_LABELS: Record<TerminalApp, string> = {
   ghostty: "Ghostty",
   kitty: "Kitty",
@@ -52,12 +57,14 @@ const statusPanelEl = document.querySelector<HTMLElement>("#status-panel")!;
 const periodFilterEl = document.querySelector<HTMLElement>("#period-filter")!;
 const themeSelectEl = document.querySelector<HTMLSelectElement>("#theme-select")!;
 const themeApplyBtn = document.querySelector<HTMLButtonElement>("#theme-apply-btn")!;
+const themeSetDayBtn = document.querySelector<HTMLButtonElement>("#theme-set-day-btn")!;
+const themeSetNightBtn = document.querySelector<HTMLButtonElement>("#theme-set-night-btn")!;
 const themeRemoveBtn = document.querySelector<HTMLButtonElement>("#theme-remove-btn")!;
 const themeDetailsEl = document.querySelector<HTMLElement>("#theme-details")!;
 const previewWindowEl = document.querySelector<HTMLElement>("#preview-window")!;
 const previewBodyEl = document.querySelector<HTMLElement>("#preview-body")!;
 const fontForm = document.querySelector<HTMLFormElement>("#font-form")!;
-const fontFamilyInput = document.querySelector<HTMLInputElement>("#font-family")!;
+const fontFamilySelect = document.querySelector<HTMLSelectElement>("#font-family")!;
 const fontSizeInput = document.querySelector<HTMLInputElement>("#font-size")!;
 const opacitySlider = document.querySelector<HTMLInputElement>("#opacity-slider")!;
 const opacityValueEl = document.querySelector<HTMLElement>("#opacity-value")!;
@@ -78,6 +85,31 @@ function errorMessage(err: unknown): string {
 async function loadApps() {
   apps = await invoke<AppInfo[]>("list_apps");
   renderAppTabs();
+}
+
+async function loadFontFamilies() {
+  const families = await invoke<string[]>("list_font_families");
+  fontFamilySelect.innerHTML = "";
+  for (const family of families) {
+    const opt = document.createElement("option");
+    opt.value = family;
+    opt.textContent = family;
+    fontFamilySelect.appendChild(opt);
+  }
+}
+
+// Selects `name` in the font dropdown, adding it as an extra option first
+// if it isn't in the installed-fonts list (e.g. a font the config already
+// references that isn't installed here anymore).
+function setFontFamilySelection(name: string) {
+  const exists = Array.from(fontFamilySelect.options).some((o) => o.value === name);
+  if (!exists) {
+    const opt = document.createElement("option");
+    opt.value = name;
+    opt.textContent = `${name} (not installed)`;
+    fontFamilySelect.prepend(opt);
+  }
+  fontFamilySelect.value = name;
 }
 
 function renderAppTabs() {
@@ -109,16 +141,17 @@ async function selectApp(app: TerminalApp) {
 async function refreshStatus() {
   statusPanelEl.innerHTML = "<p>Loading…</p>";
   try {
-    const [config, theme, undoable] = await Promise.all([
+    const [config, theme, undoable, dayNight] = await Promise.all([
       invoke<CurrentConfig>("get_current_config", { app: selectedApp }),
       invoke<Theme | null>("get_current_theme", { app: selectedApp }),
       invoke<boolean>("can_undo", { app: selectedApp }),
+      invoke<DayNightThemes>("get_day_night_themes", { app: selectedApp }),
     ]);
     currentTheme = theme;
-    renderStatus(config, theme, undoable);
+    renderStatus(config, theme, undoable, dayNight);
     selectDefaultTheme();
 
-    if (config.font_family) fontFamilyInput.value = config.font_family;
+    if (config.font_family) setFontFamilySelection(config.font_family);
     if (config.font_size !== null) fontSizeInput.value = String(config.font_size);
     if (config.opacity !== null) {
       opacitySlider.value = String(config.opacity);
@@ -133,7 +166,7 @@ async function refreshStatus() {
   }
 }
 
-function renderStatus(config: CurrentConfig, theme: Theme | null, undoable: boolean) {
+function renderStatus(config: CurrentConfig, theme: Theme | null, undoable: boolean, dayNight: DayNightThemes) {
   const info = apps.find((a) => a.app === selectedApp);
   statusPanelEl.innerHTML = "";
 
@@ -146,7 +179,9 @@ function renderStatus(config: CurrentConfig, theme: Theme | null, undoable: bool
 
   const rows: [string, string][] = [
     ["Config", info?.config_path ?? "unknown"],
-    ["Current theme", theme ? theme.name : "not applied by Sheets yet"],
+    ["All", theme ? theme.name : "not applied by Sheets yet"],
+    ["Day", dayNight.day ? dayNight.day.name : "not set"],
+    ["Night", dayNight.night ? dayNight.night.name : "not set"],
     ["Font", config.font_family ? `${config.font_family} @ ${config.font_size ?? "?"}` : "not set"],
     ["Opacity", config.opacity !== null ? `${Math.round(config.opacity * 100)}%` : "not set"],
   ];
@@ -251,6 +286,17 @@ async function applyTheme() {
     await refreshStatus();
   } catch (err) {
     alert(`Couldn't apply "${theme.name}": ${errorMessage(err)}`);
+  }
+}
+
+async function setSelectedThemeFor(period: Period) {
+  const theme = selectedThemeInDropdown();
+  if (!theme) return;
+  try {
+    await invoke(period === "day" ? "set_day_theme" : "set_night_theme", { app: selectedApp, themeId: theme.id });
+    await refreshStatus();
+  } catch (err) {
+    alert(`Couldn't set "${theme.name}" as the ${period} theme: ${errorMessage(err)}`);
   }
 }
 
@@ -361,6 +407,7 @@ window.addEventListener("DOMContentLoaded", async () => {
   try {
     await loadApps();
     await loadThemes();
+    await loadFontFamilies();
     await refreshStatus();
   } catch (err) {
     statusPanelEl.innerHTML = "";
@@ -384,6 +431,8 @@ window.addEventListener("DOMContentLoaded", async () => {
 
   themeSelectEl.addEventListener("change", onThemeSelectionChanged);
   themeApplyBtn.addEventListener("click", applyTheme);
+  themeSetDayBtn.addEventListener("click", () => setSelectedThemeFor("day"));
+  themeSetNightBtn.addEventListener("click", () => setSelectedThemeFor("night"));
   themeRemoveBtn.addEventListener("click", removeSelectedTheme);
 
   fontForm.addEventListener("submit", async (e) => {
@@ -391,7 +440,7 @@ window.addEventListener("DOMContentLoaded", async () => {
     try {
       await invoke("apply_font", {
         app: selectedApp,
-        font: { family: fontFamilyInput.value, size: parseFloat(fontSizeInput.value) },
+        font: { family: fontFamilySelect.value, size: parseFloat(fontSizeInput.value) },
       });
       await refreshStatus();
     } catch (err) {

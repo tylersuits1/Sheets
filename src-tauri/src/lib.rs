@@ -2,6 +2,8 @@ pub mod apps;
 pub mod backup;
 mod commands;
 pub mod config_dir;
+mod day_night;
+mod fonts;
 mod ghostty_import;
 mod kv_config;
 pub mod theme;
@@ -73,7 +75,11 @@ pub fn run() {
             commands::list_themes,
             commands::list_themes_for_period,
             commands::get_current_theme,
+            commands::get_day_night_themes,
+            commands::set_day_theme,
+            commands::set_night_theme,
             commands::apply_theme,
+            commands::list_font_families,
             commands::apply_font,
             commands::apply_opacity,
             commands::can_undo,

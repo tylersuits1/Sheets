@@ -32,9 +32,22 @@
         <div class="theme-picker">
           <select id="theme-select"></select>
           <button type="button" id="theme-apply-btn">Apply</button>
+        </div>
+        <div class="theme-picker">
+          <button type="button" id="theme-set-day-btn">Set as Day</button>
+          <button type="button" id="theme-set-night-btn">Set as Night</button>
           <button type="button" id="theme-remove-btn" class="danger" hidden>Remove</button>
         </div>
         <div class="theme-details" id="theme-details"></div>
+      </section>
+
+      <section class="panel">
+        <h2>Font</h2>
+        <form id="font-form" class="inline-form">
+          <select id="font-family" required></select>
+          <input id="font-size" type="number" min="6" max="72" step="0.5" placeholder="Size" required />
+          <button type="submit">Apply font</button>
+        </form>
       </section>
 
       <section class="panel">
@@ -51,16 +64,11 @@
       </section>
 
       <section class="panel">
-        <h2>Font</h2>
-        <form id="font-form" class="inline-form">
-          <input id="font-family" type="text" placeholder="Font family" required />
-          <input id="font-size" type="number" min="6" max="72" step="0.5" placeholder="Size" required />
-          <button type="submit">Apply font</button>
-        </form>
-      </section>
-
-      <section class="panel">
         <h2>Transparency</h2>
+        <p class="hint">
+          Not reflected in the preview above — that's a flat mock, not a real transparent window. As a rough guide:
+          100% is opaque, 85–95% is a subtle tint, 60–80% is clearly see-through, and below 50% is quite transparent.
+        </p>
         <div class="opacity-row">
           <input id="opacity-slider" type="range" min="0" max="1" step="0.01" value="1" />
           <span id="opacity-value">100%</span>
