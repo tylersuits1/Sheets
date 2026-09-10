@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { open } from "@tauri-apps/plugin-dialog";
 
 type TerminalApp = "ghostty" | "kitty" | "alacritty";
@@ -282,6 +283,13 @@ function onThemeSelectionChanged() {
 
 const PERIOD_LABEL: Record<"both" | Period, string> = { both: "Both", day: "Day", night: "Night" };
 
+// Most terminal config changes only take effect on that app's next launch —
+// append this to every apply confirmation so it doesn't look like nothing
+// happened.
+function restartNote(): string {
+  return ` Quit and reopen ${APP_LABELS[selectedApp]} to see the change.`;
+}
+
 // Applying designates the theme for whichever tab you were browsing when
 // you hit Apply: Day/Night sets just that one, Both sets both at once.
 async function applyTheme() {
@@ -296,7 +304,7 @@ async function applyTheme() {
       await invoke("set_night_theme", { app: selectedApp, themeId: theme.id });
     }
     await refreshStatus();
-    themeDetailsEl.textContent = `"${theme.name}" applied to ${PERIOD_LABEL[periodFilter]}.`;
+    themeDetailsEl.textContent = `"${theme.name}" applied to ${PERIOD_LABEL[periodFilter]}.${restartNote()}`;
     themeDetailsEl.className = "status-message success";
   } catch (err) {
     alert(`Couldn't apply "${theme.name}": ${errorMessage(err)}`);
@@ -406,6 +414,52 @@ function updateOpacityLabel() {
   opacityValueEl.textContent = `${Math.round(Number(opacitySlider.value) * 100)}%`;
 }
 
+// Fired by the Create Theme window after a successful save, and by the
+// backend after importing a .json file (File > Import Theme…, or macOS
+// "Open With > Sheets" / double-clicking one). Either way, the theme now
+// exists on disk — refresh the list so it shows up, then offer to apply it.
+async function handleNewTheme(theme: Theme) {
+  await loadThemes();
+  if (confirm(`Apply "${theme.name}" now?`)) {
+    themeSelectEl.value = theme.id;
+    onThemeSelectionChanged();
+    await applyTheme();
+  }
+}
+
+listen<Theme>("theme-created", (event) => handleNewTheme(event.payload));
+listen<Theme>("theme-imported", (event) => handleNewTheme(event.payload));
+listen<string>("theme-import-error", (event) => {
+  alert(`Couldn't import theme: ${event.payload}`);
+});
+
+// File > Edit Current Theme: the native menu can't know which app tab is
+// selected, so it just pokes the main window, which computes the seed
+// colors itself (from whichever theme is identified as currently applied,
+// falling back to the raw live palette if the colors don't match anything
+// Sheets recognizes) and hands them to a fresh Create Theme window.
+listen("menu-edit-current-theme", async () => {
+  let name = currentTheme?.name ?? "";
+  let variant = currentTheme?.variant ?? "dark";
+  let palette = currentTheme?.palette ?? null;
+
+  if (!palette) {
+    palette = await invoke<Palette | null>("get_current_palette", { app: selectedApp });
+  }
+  if (!palette) {
+    alert(`No theme is currently applied to ${APP_LABELS[selectedApp]} yet.`);
+    return;
+  }
+  // Editing a pre-installed theme has to produce a distinct theme, not
+  // overwrite the original — nudge the name so it doesn't collide outright.
+  if (currentTheme && currentTheme.source === "built_in") {
+    name = `${currentTheme.name} (edited)`;
+  }
+
+  await invoke("set_edit_seed", { seed: { name, variant, palette } });
+  await invoke("open_create_theme_window");
+});
+
 window.addEventListener("DOMContentLoaded", async () => {
   try {
     await loadApps();
@@ -444,7 +498,7 @@ window.addEventListener("DOMContentLoaded", async () => {
         font: { family: fontFamilySelect.value, size: parseFloat(fontSizeInput.value) },
       });
       await refreshStatus();
-      setStatus(fontStatusEl, `Font set to ${fontFamilySelect.value} @ ${fontSizeInput.value}pt.`, "success");
+      setStatus(fontStatusEl, `Font set to ${fontFamilySelect.value} @ ${fontSizeInput.value}pt.${restartNote()}`, "success");
     } catch (err) {
       setStatus(fontStatusEl, `Couldn't apply font: ${errorMessage(err)}`, "error");
     }
@@ -459,7 +513,7 @@ window.addEventListener("DOMContentLoaded", async () => {
       const percent = Math.round(Number(opacitySlider.value) * 100);
       await invoke("apply_opacity", { app: selectedApp, opacity: parseFloat(opacitySlider.value) });
       await refreshStatus();
-      setStatus(opacityStatusEl, `Opacity set to ${percent}%.`, "success");
+      setStatus(opacityStatusEl, `Opacity set to ${percent}%.${restartNote()}`, "success");
     } catch (err) {
       setStatus(opacityStatusEl, `Couldn't apply opacity: ${errorMessage(err)}`, "error");
     }

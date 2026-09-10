@@ -22,17 +22,26 @@ pub(crate) mod test_support {
 }
 
 use tauri::menu::{MenuBuilder, MenuItemBuilder, SubmenuBuilder};
-use tauri::{Manager, WebviewUrl, WebviewWindowBuilder};
+use tauri::{Emitter, Manager, WebviewUrl, WebviewWindowBuilder};
+use tauri_plugin_dialog::DialogExt;
 
 fn build_menu(app: &tauri::App) -> tauri::Result<tauri::menu::Menu<tauri::Wry>> {
     let create_theme = MenuItemBuilder::with_id("create-theme", "Create Theme…")
         .accelerator("CmdOrCtrl+N")
         .build(app)?;
+    let import_theme = MenuItemBuilder::with_id("import-theme", "Import Theme…")
+        .accelerator("CmdOrCtrl+I")
+        .build(app)?;
     let export_theme = MenuItemBuilder::with_id("export-theme", "Export Theme…")
         .accelerator("CmdOrCtrl+E")
         .build(app)?;
+    let edit_current_theme = MenuItemBuilder::with_id("edit-current-theme", "Edit Current Theme…")
+        .accelerator("CmdOrCtrl+Shift+E")
+        .build(app)?;
     let file_menu = SubmenuBuilder::new(app, "File")
         .item(&create_theme)
+        .item(&edit_current_theme)
+        .item(&import_theme)
         .item(&export_theme)
         .separator()
         .close_window()
@@ -55,7 +64,7 @@ fn build_menu(app: &tauri::App) -> tauri::Result<tauri::menu::Menu<tauri::Wry>> 
     MenuBuilder::new(app).item(&app_menu).item(&file_menu).item(&edit_menu).item(&window_menu).build()
 }
 
-fn open_or_focus(app: &tauri::AppHandle, label: &str, page: &str, title: &str) {
+pub(crate) fn open_or_focus(app: &tauri::AppHandle, label: &str, page: &str, title: &str) {
     if let Some(window) = app.get_webview_window(label) {
         let _ = window.set_focus();
         return;
@@ -66,9 +75,26 @@ fn open_or_focus(app: &tauri::AppHandle, label: &str, page: &str, title: &str) {
         .build();
 }
 
+/// Imports a `sheets-theme.json` file and tells the main window about the
+/// result, whether that came from File > Import Theme… (a picked file path)
+/// or macOS "Open With > Sheets" / double-clicking one (`RunEvent::Opened`).
+fn import_theme_and_notify(app: &tauri::AppHandle, path: &std::path::Path) {
+    let result = theme_store::import_theme_from_file(&path.display().to_string());
+    let Some(window) = app.get_webview_window("main") else { return };
+    let _ = window.set_focus();
+    match result {
+        Ok(theme) => {
+            let _ = window.emit("theme-imported", &theme);
+        }
+        Err(err) => {
+            let _ = window.emit("theme-import-error", &err);
+        }
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
+    let app = tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
@@ -76,9 +102,25 @@ pub fn run() {
             app.set_menu(menu)?;
             Ok(())
         })
+        .manage(commands::EditSeedState(std::sync::Mutex::new(None)))
         .on_menu_event(|app, event| match event.id().as_ref() {
             "create-theme" => open_or_focus(app, "create-theme", "create-theme.html", "Create Theme"),
             "export-theme" => open_or_focus(app, "export-theme", "export-theme.html", "Export Theme"),
+            // The main window is the one that knows which app tab is
+            // selected, so it computes the seed colors itself once notified.
+            "edit-current-theme" => {
+                if let Some(window) = app.get_webview_window("main") {
+                    let _ = window.emit("menu-edit-current-theme", ());
+                }
+            }
+            "import-theme" => {
+                let app_handle = app.clone();
+                app.dialog().file().add_filter("Sheets theme", &["json"]).pick_file(move |file| {
+                    let Some(file) = file else { return };
+                    let Ok(path) = file.into_path() else { return };
+                    import_theme_and_notify(&app_handle, &path);
+                });
+            }
             _ => {}
         })
         .invoke_handler(tauri::generate_handler![
@@ -89,6 +131,7 @@ pub fn run() {
             commands::list_themes,
             commands::list_themes_for_period,
             commands::get_current_theme,
+            commands::get_current_palette,
             commands::get_day_night_themes,
             commands::set_day_theme,
             commands::set_night_theme,
@@ -100,9 +143,26 @@ pub fn run() {
             commands::undo_last_change,
             commands::remove_user_theme,
             commands::create_custom_theme,
+            commands::import_theme_from_file,
             commands::list_exportable_themes,
             commands::export_theme_to_path,
+            commands::set_edit_seed,
+            commands::take_edit_seed,
+            commands::open_create_theme_window,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application");
+
+    app.run(|app_handle, event| {
+        // Fired on macOS when a file is opened via Finder (double-click or
+        // "Open With > Sheets"), whether Sheets was already running or this
+        // is what launched it.
+        if let tauri::RunEvent::Opened { urls } = event {
+            for url in urls {
+                if let Ok(path) = url.to_file_path() {
+                    import_theme_and_notify(app_handle, &path);
+                }
+            }
+        }
+    });
 }

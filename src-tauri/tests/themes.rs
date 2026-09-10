@@ -109,6 +109,109 @@ fn exported_theme_matches_the_documented_sheets_theme_json_shape() {
 }
 
 #[test]
+fn imported_theme_matches_the_documented_sheets_theme_json_shape() {
+    let _guard = ENV_LOCK.lock().unwrap();
+    let scratch = std::env::temp_dir().join(format!("sheets-import-shape-test-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&scratch);
+    std::env::set_var("XDG_CONFIG_HOME", &scratch);
+
+    let manifest_path = scratch.join("sheets-theme.json");
+    std::fs::create_dir_all(&scratch).unwrap();
+    std::fs::write(
+        &manifest_path,
+        r#"{
+  "name": "Imported Example",
+  "variant": "dark",
+  "palette": {
+    "background": "1a1b26",
+    "foreground": "c0caf5",
+    "cursor": "c0caf5",
+    "selection_background": "283457",
+    "selection_foreground": null,
+    "ansi": [
+      "15161e", "f7768e", "9ece6a", "e0af68",
+      "7aa2f7", "bb9af7", "7dcfff", "a9b1d6",
+      "414868", "f7768e", "9ece6a", "e0af68",
+      "7aa2f7", "bb9af7", "7dcfff", "c0caf5"
+    ]
+  }
+}"#,
+    )
+    .unwrap();
+
+    let theme = theme_store::import_theme_from_file(manifest_path.to_str().unwrap()).unwrap();
+    assert_eq!(theme.id, "imported-example");
+    assert_eq!(theme.name, "Imported Example");
+    assert_eq!(theme.variant, ThemeVariant::Dark);
+    assert_eq!(theme.source, ThemeSource::UserInstalled);
+    assert_eq!(theme.palette.background, "1a1b26");
+    assert_eq!(theme.palette.selection_foreground, None);
+
+    // It's now a real listed, exportable user theme, same as one created by hand.
+    let listed = theme_store::get_theme("imported-example").unwrap();
+    assert_eq!(listed.palette.foreground, "c0caf5");
+    assert!(theme_store::export_theme_json("imported-example").is_ok());
+
+    let _ = std::fs::remove_dir_all(&scratch);
+}
+
+#[test]
+fn importing_a_non_theme_json_file_is_a_clear_error() {
+    let scratch = std::env::temp_dir().join(format!("sheets-import-bad-json-{}", std::process::id()));
+    std::fs::create_dir_all(&scratch).unwrap();
+    let bad_path = scratch.join("not-a-theme.json");
+    std::fs::write(&bad_path, r#"{"hello": "world"}"#).unwrap();
+
+    let err = theme_store::import_theme_from_file(bad_path.to_str().unwrap()).unwrap_err();
+    assert!(err.contains("not a valid sheets-theme.json"), "unexpected error: {err}");
+
+    let _ = std::fs::remove_dir_all(&scratch);
+}
+
+#[test]
+fn saving_a_theme_named_after_a_builtin_is_rejected() {
+    let _guard = ENV_LOCK.lock().unwrap();
+    let scratch = std::env::temp_dir().join(format!("sheets-builtin-collision-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&scratch);
+    std::env::set_var("XDG_CONFIG_HOME", &scratch);
+
+    // "Edit Current Theme" on a pre-installed theme must never be able to
+    // shadow or overwrite the original — it has to be saved under a
+    // different name, becoming its own separate theme.
+    let err = theme_store::save_user_theme("Tokyo Night".into(), ThemeVariant::Dark, sample_palette()).unwrap_err();
+    assert!(err.contains("pre-installed theme"), "unexpected error: {err}");
+    assert!(theme_store::get_theme("tokyo-night").unwrap().source == ThemeSource::BuiltIn, "the original must be untouched");
+
+    // A distinct name for the same edited colors is fine.
+    let saved =
+        theme_store::save_user_theme("Tokyo Night (edited)".into(), ThemeVariant::Dark, sample_palette()).unwrap();
+    assert_eq!(saved.source, ThemeSource::UserInstalled);
+
+    let _ = std::fs::remove_dir_all(&scratch);
+}
+
+#[test]
+fn saving_a_theme_under_an_existing_user_themes_name_overwrites_it() {
+    let _guard = ENV_LOCK.lock().unwrap();
+    let scratch = std::env::temp_dir().join(format!("sheets-overwrite-user-theme-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&scratch);
+    std::env::set_var("XDG_CONFIG_HOME", &scratch);
+
+    theme_store::save_user_theme("My Theme".into(), ThemeVariant::Dark, sample_palette()).unwrap();
+
+    let mut edited = sample_palette();
+    edited.background = "202020".into();
+    let updated = theme_store::save_user_theme("My Theme".into(), ThemeVariant::Light, edited).unwrap();
+    assert_eq!(updated.variant, ThemeVariant::Light);
+
+    let listed = theme_store::get_theme("my-theme").unwrap();
+    assert_eq!(listed.palette.background, "202020");
+    assert_eq!(theme_store::list_themes().unwrap().iter().filter(|t| t.id == "my-theme").count(), 1);
+
+    let _ = std::fs::remove_dir_all(&scratch);
+}
+
+#[test]
 fn empty_theme_name_is_rejected() {
     let _guard = ENV_LOCK.lock().unwrap();
     let scratch = std::env::temp_dir().join(format!("sheets-create-theme-empty-{}", std::process::id()));

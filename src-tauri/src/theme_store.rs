@@ -109,15 +109,27 @@ pub fn remove_user_theme(id: &str) -> Result<(), String> {
     save_user_themes(&themes)
 }
 
-/// Creates a theme from hand-picked colors (the "File > Create Theme"
-/// window), storing it exactly like a git-installed one but with no
-/// `git_url` — both are `UserInstalled`, which is what makes a theme
-/// eligible for export.
+/// Creates (or, if a user theme already has this exact name, overwrites)
+/// a theme from hand-picked colors — used by both "File > Create Theme" and
+/// "Edit Current Theme". Saving under a name that collides with a pre-installed
+/// theme (a built-in, or one of the ~460 imported from Ghostty) is rejected:
+/// editing a pre-installed theme is only ever allowed to produce a separate,
+/// new theme, never to overwrite the original.
 pub fn save_user_theme(name: String, variant: ThemeVariant, palette: Palette) -> Result<Theme, String> {
     if name.trim().is_empty() {
         return Err("theme name can't be empty".to_string());
     }
-    let theme = Theme { id: slugify(&name), name, variant, source: ThemeSource::UserInstalled, git_url: None, palette };
+    let id = slugify(&name);
+
+    let built_ins_and_imports: Vec<Theme> =
+        built_in_themes().into_iter().chain(crate::ghostty_import::list_bundled_themes()).collect();
+    if built_ins_and_imports.iter().any(|t| t.id == id) {
+        return Err(format!(
+            "\"{name}\" is a pre-installed theme name — pick a different name to save your changes as a new theme"
+        ));
+    }
+
+    let theme = Theme { id, name, variant, source: ThemeSource::UserInstalled, git_url: None, palette };
 
     let mut themes = load_user_themes()?;
     themes.retain(|t| t.id != theme.id);
@@ -139,11 +151,22 @@ pub fn export_theme_json(id: &str) -> Result<String, String> {
     serde_json::to_string_pretty(&manifest).map_err(|e| e.to_string())
 }
 
+/// Reads a `sheets-theme.json` file from disk (from File > Import Theme…, or
+/// from macOS "Open With > Sheets" / double-clicking one) and installs it as
+/// a user theme, the same as one hand-created in the Create Theme window.
+pub fn import_theme_from_file(path: &str) -> Result<Theme, String> {
+    let contents = fs::read_to_string(path).map_err(|e| format!("couldn't read {path}: {e}"))?;
+    let manifest: ThemeManifest =
+        serde_json::from_str(&contents).map_err(|e| format!("not a valid sheets-theme.json file: {e}"))?;
+    save_user_theme(manifest.name, manifest.variant, manifest.palette)
+}
+
 /// The `sheets-theme.json` shape a theme repo is documented to have, as
 /// described in the README's "Theme repo format" section — keep the two in
-/// sync (`exported_theme_matches_the_documented_sheets_theme_json_shape` in
-/// tests/themes.rs checks this).
-#[derive(serde::Serialize)]
+/// sync (`exported_theme_matches_the_documented_sheets_theme_json_shape` and
+/// `imported_theme_matches_the_documented_sheets_theme_json_shape` in
+/// tests/themes.rs check this both ways).
+#[derive(serde::Serialize, serde::Deserialize)]
 struct ThemeManifest {
     name: String,
     variant: ThemeVariant,

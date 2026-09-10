@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import { emit } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 
 type ThemeVariant = "dark" | "light" | "both";
@@ -86,6 +87,8 @@ function makeColorField(label: string, initialHex: string): ColorField {
   };
 }
 
+const editorTitleEl = document.querySelector<HTMLElement>("#editor-title")!;
+const editorHintEl = document.querySelector<HTMLElement>("#editor-hint")!;
 const nameInput = document.querySelector<HTMLInputElement>("#theme-name")!;
 const variantSelect = document.querySelector<HTMLSelectElement>("#theme-variant")!;
 const coreColorsEl = document.querySelector<HTMLElement>("#core-colors")!;
@@ -110,6 +113,36 @@ function errorMessage(err: unknown): string {
   return typeof err === "string" ? err : err instanceof Error ? err.message : String(err);
 }
 
+interface EditSeed {
+  name: string;
+  variant: ThemeVariant;
+  palette: Palette;
+}
+
+// "Edit Current Theme" reuses this same window: the main window stashes the
+// live colors here just before opening it, and we pick them up on load. A
+// plain "File > Create Theme" leaves nothing pending, so this is a no-op.
+(async () => {
+  const seed = await invoke<EditSeed | null>("take_edit_seed");
+  if (!seed) return;
+
+  editorTitleEl.textContent = "Edit theme";
+  editorHintEl.textContent =
+    "Editing a pre-installed theme? Give it a different name below to save your " +
+    "changes as a new theme — the original stays untouched. Editing one of your own " +
+    "themes under the same name will just update it.";
+  editorHintEl.hidden = false;
+
+  nameInput.value = seed.name;
+  variantSelect.value = seed.variant;
+  background.set(seed.palette.background);
+  foreground.set(seed.palette.foreground);
+  if (seed.palette.cursor) cursor.set(seed.palette.cursor);
+  if (seed.palette.selection_background) selectionBackground.set(seed.palette.selection_background);
+  if (seed.palette.selection_foreground) selectionForeground.set(seed.palette.selection_foreground);
+  seed.palette.ansi.forEach((hex, i) => ansiFields[i]?.set(hex));
+})();
+
 cancelBtn.addEventListener("click", () => {
   getCurrentWindow().close();
 });
@@ -132,7 +165,8 @@ saveBtn.addEventListener("click", async () => {
   };
 
   try {
-    await invoke("create_custom_theme", { name, variant: variantSelect.value as ThemeVariant, palette });
+    const theme = await invoke("create_custom_theme", { name, variant: variantSelect.value as ThemeVariant, palette });
+    await emit("theme-created", theme);
     getCurrentWindow().close();
   } catch (err) {
     statusEl.textContent = errorMessage(err);

@@ -5,8 +5,9 @@ use crate::day_night;
 use crate::fonts;
 use crate::theme::{FontSettings, Palette, Period, Theme, ThemeVariant};
 use crate::theme_store;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
+use std::sync::Mutex;
 
 #[derive(Serialize)]
 pub struct AppInfo {
@@ -67,6 +68,14 @@ pub fn get_current_theme(app: TerminalApp) -> Result<Option<Theme>, String> {
         Some(palette) => theme_store::identify_theme(&palette),
         None => Ok(None),
     }
+}
+
+/// The raw colors currently configured for `app`, regardless of whether they
+/// match a known theme — used by "Edit Current Theme" to pre-fill the editor
+/// even when the live colors don't identify to anything Sheets recognizes.
+#[tauri::command]
+pub fn get_current_palette(app: TerminalApp) -> Result<Option<Palette>, String> {
+    app.adapter().read_current_palette()
 }
 
 #[derive(Serialize)]
@@ -164,4 +173,46 @@ pub fn list_exportable_themes() -> Result<Vec<Theme>, String> {
 pub fn export_theme_to_path(theme_id: String, path: String) -> Result<(), String> {
     let json = theme_store::export_theme_json(&theme_id)?;
     std::fs::write(&path, json).map_err(|e| e.to_string())
+}
+
+/// Used by File > Import Theme… (a native file picker) — opening a
+/// `sheets-theme.json` from Finder's "Open With" goes through the same
+/// `theme_store::import_theme_from_file` directly from `lib.rs` instead,
+/// since that path starts outside any invoke() call.
+#[tauri::command]
+pub fn import_theme_from_file(path: String) -> Result<Theme, String> {
+    theme_store::import_theme_from_file(&path)
+}
+
+/// Hand-off state for "Edit Current Theme": the main window (which knows
+/// which app tab is selected) computes the seed colors and stashes them here
+/// just before opening the Create Theme window, which reads them back once
+/// on load via `take_edit_seed`. A plain "File > Create Theme" leaves this
+/// empty, so the window opens blank as usual.
+pub struct EditSeedState(pub Mutex<Option<EditSeed>>);
+
+#[derive(Clone, Serialize, Deserialize)]
+pub struct EditSeed {
+    pub name: String,
+    pub variant: ThemeVariant,
+    pub palette: Palette,
+}
+
+#[tauri::command]
+pub fn set_edit_seed(seed: EditSeed, state: tauri::State<EditSeedState>) {
+    *state.0.lock().unwrap() = Some(seed);
+}
+
+#[tauri::command]
+pub fn take_edit_seed(state: tauri::State<EditSeedState>) -> Option<EditSeed> {
+    state.0.lock().unwrap().take()
+}
+
+/// Opens (or focuses) the Create Theme window from the frontend — used for
+/// "Edit Current Theme", which needs the main window's own knowledge of
+/// which app tab is selected before it can compute seed colors, so it can't
+/// be triggered as a plain native menu action the way Create/Export are.
+#[tauri::command]
+pub fn open_create_theme_window(app: tauri::AppHandle) {
+    crate::open_or_focus(&app, "create-theme", "create-theme.html", "Create Theme");
 }

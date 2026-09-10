@@ -31,6 +31,14 @@
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
+    ],
+    "fileAssociations": [
+      {
+        "ext": ["json"],
+        "name": "Sheets Theme",
+        "description": "Sheets theme file",
+        "role": "Editor"
+      }
     ]
   }
 }

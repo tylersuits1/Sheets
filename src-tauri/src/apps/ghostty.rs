@@ -1,4 +1,5 @@
 use super::{ConfigAdapter, CurrentConfig, TerminalApp};
+#[cfg(not(target_os = "macos"))]
 use crate::config_dir::xdg_config_home;
 use crate::config_override;
 use crate::kv_config::{KvConfig, KvSyntax};
@@ -12,7 +13,17 @@ impl ConfigAdapter for GhosttyAdapter {
         if let Some(p) = config_override::get(TerminalApp::Ghostty)? {
             return Ok(p);
         }
-        Ok(xdg_config_home()?.join("ghostty").join("config"))
+        // On macOS, Ghostty loads this file AFTER the XDG one and lets it
+        // win any conflict — so this has to be the file Sheets manages, not
+        // ~/.config/ghostty/config, or applied themes silently never show.
+        #[cfg(target_os = "macos")]
+        {
+            crate::config_dir::ghostty_macos_config_path()
+        }
+        #[cfg(not(target_os = "macos"))]
+        {
+            Ok(xdg_config_home()?.join("ghostty").join("config"))
+        }
     }
 
     fn read_current(&self) -> Result<CurrentConfig, String> {

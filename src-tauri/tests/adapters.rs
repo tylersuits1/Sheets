@@ -3,22 +3,33 @@ use sheets_lib::backup;
 use sheets_lib::theme::{FontSettings, Period};
 use sheets_lib::theme_store;
 use std::fs;
+use std::path::Path;
 use std::sync::Mutex;
 
-// Both tests mutate the process-global `XDG_CONFIG_HOME` env var, so they
-// must not run concurrently.
+// These tests mutate the process-global `XDG_CONFIG_HOME` and `HOME` env
+// vars, so they must not run concurrently.
 static ENV_LOCK: Mutex<()> = Mutex::new(());
+
+/// Points both `XDG_CONFIG_HOME` and `HOME` at `scratch`. Ghostty's macOS
+/// config path (`~/Library/Application Support/com.mitchellh.ghostty/...`)
+/// is derived from `HOME` directly, not `XDG_CONFIG_HOME` — without also
+/// overriding `HOME`, Ghostty-touching tests would read/write the real
+/// machine's actual Ghostty config instead of the scratch sandbox.
+fn sandbox_env(scratch: &Path) {
+    std::env::set_var("XDG_CONFIG_HOME", scratch);
+    std::env::set_var("HOME", scratch);
+}
 
 /// Exercises the full backbone end to end: pointing all three adapters at a
 /// scratch config directory, applying a built-in theme + font + opacity, and
 /// checking the files they write are sane. Everything runs in one test
-/// function since it depends on the process-global `XDG_CONFIG_HOME`.
+/// function since it depends on the process-global `XDG_CONFIG_HOME`/`HOME`.
 #[test]
 fn adapters_write_expected_config_files() {
     let _guard = ENV_LOCK.lock().unwrap();
     let scratch = std::env::temp_dir().join(format!("sheets-adapter-test-{}", std::process::id()));
     let _ = fs::remove_dir_all(&scratch);
-    std::env::set_var("XDG_CONFIG_HOME", &scratch);
+    sandbox_env(&scratch);
 
     let theme = theme_store::get_theme("tokyo-night").expect("built-in theme should exist");
     let font = FontSettings { family: "JetBrains Mono".into(), size: 13.0 };
@@ -87,15 +98,16 @@ fn ghostty_preserves_hand_written_lines_outside_the_managed_block() {
     let _guard = ENV_LOCK.lock().unwrap();
     let scratch = std::env::temp_dir().join(format!("sheets-preserve-test-{}", std::process::id()));
     let _ = fs::remove_dir_all(&scratch);
-    let ghostty_dir = scratch.join("ghostty");
-    fs::create_dir_all(&ghostty_dir).unwrap();
-    fs::write(ghostty_dir.join("config"), "keybind = ctrl+shift+c=copy\n# a comment\n").unwrap();
-    std::env::set_var("XDG_CONFIG_HOME", &scratch);
+    sandbox_env(&scratch);
+
+    let path = TerminalApp::Ghostty.adapter().config_path().unwrap();
+    fs::create_dir_all(path.parent().unwrap()).unwrap();
+    fs::write(&path, "keybind = ctrl+shift+c=copy\n# a comment\n").unwrap();
 
     let theme = theme_store::get_theme("solarized-light").unwrap();
     TerminalApp::Ghostty.adapter().apply_theme(&theme).unwrap();
 
-    let contents = fs::read_to_string(ghostty_dir.join("config")).unwrap();
+    let contents = fs::read_to_string(&path).unwrap();
     assert!(contents.contains("keybind = ctrl+shift+c=copy"));
     assert!(contents.contains("# a comment"));
     assert!(contents.contains("background = fdf6e3"));
@@ -108,23 +120,20 @@ fn ghostty_apply_theme_clears_a_conflicting_hand_written_theme_directive() {
     let _guard = ENV_LOCK.lock().unwrap();
     let scratch = std::env::temp_dir().join(format!("sheets-theme-directive-test-{}", std::process::id()));
     let _ = fs::remove_dir_all(&scratch);
-    let ghostty_dir = scratch.join("ghostty");
-    fs::create_dir_all(&ghostty_dir).unwrap();
+    sandbox_env(&scratch);
+
+    let path = TerminalApp::Ghostty.adapter().config_path().unwrap();
+    fs::create_dir_all(path.parent().unwrap()).unwrap();
     // Ghostty's own `theme` directive (commonly auto-set to follow macOS's
     // system appearance) loads a whole named theme and overrides explicit
     // background/foreground/palette settings regardless of file order -
     // applying a Sheets theme has to actually take visible effect over it.
-    fs::write(
-        ghostty_dir.join("config"),
-        "theme = dark:Apple System Colors, light:Apple System Colors Light\nfont-family = Menlo\n",
-    )
-    .unwrap();
-    std::env::set_var("XDG_CONFIG_HOME", &scratch);
+    fs::write(&path, "theme = dark:Apple System Colors, light:Apple System Colors Light\nfont-family = Menlo\n").unwrap();
 
     let theme = theme_store::get_theme("tokyo-night").unwrap();
     TerminalApp::Ghostty.adapter().apply_theme(&theme).unwrap();
 
-    let contents = fs::read_to_string(ghostty_dir.join("config")).unwrap();
+    let contents = fs::read_to_string(&path).unwrap();
     assert!(!contents.contains("theme ="), "the conflicting theme directive should be removed:\n{contents}");
     assert!(contents.contains("font-family = Menlo"), "unrelated hand-written lines should survive");
     assert!(contents.contains("background = 1a1b26"));
@@ -137,8 +146,10 @@ fn ghostty_apply_theme_overrides_a_hand_written_palette_ghostty_actually_keeps()
     let _guard = ENV_LOCK.lock().unwrap();
     let scratch = std::env::temp_dir().join(format!("sheets-first-wins-test-{}", std::process::id()));
     let _ = fs::remove_dir_all(&scratch);
-    let ghostty_dir = scratch.join("ghostty");
-    fs::create_dir_all(&ghostty_dir).unwrap();
+    sandbox_env(&scratch);
+
+    let path = TerminalApp::Ghostty.adapter().config_path().unwrap();
+    fs::create_dir_all(path.parent().unwrap()).unwrap();
     // Confirmed against a real Ghostty install: when a scalar key like
     // `background` is defined twice, Ghostty renders using the FIRST
     // definition, not the last. A hand-written palette from before Sheets
@@ -168,19 +179,45 @@ palette = 13=#df69ba
 palette = 14=#35a77c
 palette = 15=#fffbef
 ";
-    fs::write(ghostty_dir.join("config"), hand_written).unwrap();
-    std::env::set_var("XDG_CONFIG_HOME", &scratch);
+    fs::write(&path, hand_written).unwrap();
 
     let theme = theme_store::get_theme("tokyo-night").unwrap();
     TerminalApp::Ghostty.adapter().apply_theme(&theme).unwrap();
 
-    let contents = fs::read_to_string(ghostty_dir.join("config")).unwrap();
+    let contents = fs::read_to_string(&path).unwrap();
     let count_key = |key: &str| contents.lines().filter(|l| l.trim_start().starts_with(&format!("{key} = "))).count();
     assert_eq!(count_key("background"), 1, "only one background definition should remain:\n{contents}");
     assert_eq!(count_key("foreground"), 1, "only one foreground definition should remain:\n{contents}");
     assert!(!contents.contains("#1e2326"), "the old hand-written background must be gone:\n{contents}");
     assert!(contents.contains("background = 1a1b26"), "the new theme's background must be present:\n{contents}");
     assert!(contents.contains("macos-titlebar-style = native"), "unrelated hand-written settings must survive");
+
+    let _ = fs::remove_dir_all(&scratch);
+}
+
+/// On macOS, Ghostty loads `~/.config/ghostty/config` (XDG) AND a
+/// macOS-native file under Application Support, applying the macOS one
+/// *after* — so it silently wins any conflict. Confirmed against a real
+/// machine where a theme applied via the XDG path never took visible
+/// effect because of stray values sitting in the Application Support file.
+/// Sheets has to manage that file, not the XDG one, on macOS.
+#[test]
+#[cfg(target_os = "macos")]
+fn ghostty_manages_the_macos_application_support_file_not_xdg() {
+    let _guard = ENV_LOCK.lock().unwrap();
+    let scratch = std::env::temp_dir().join(format!("sheets-macos-config-path-test-{}", std::process::id()));
+    let _ = fs::remove_dir_all(&scratch);
+    sandbox_env(&scratch);
+
+    let theme = theme_store::get_theme("tokyo-night").unwrap();
+    TerminalApp::Ghostty.adapter().apply_theme(&theme).unwrap();
+
+    let app_support_path =
+        scratch.join("Library/Application Support/com.mitchellh.ghostty").join("config.ghostty");
+    assert!(app_support_path.exists(), "Sheets should write to the macOS Application Support file");
+
+    let xdg_path = scratch.join("ghostty").join("config");
+    assert!(!xdg_path.exists(), "Sheets should not create the XDG file on macOS");
 
     let _ = fs::remove_dir_all(&scratch);
 }
@@ -208,14 +245,13 @@ fn undo_restores_the_hand_written_config_that_preceded_a_change() {
     let _guard = ENV_LOCK.lock().unwrap();
     let scratch = std::env::temp_dir().join(format!("sheets-undo-existing-{}", std::process::id()));
     let _ = fs::remove_dir_all(&scratch);
-    let ghostty_dir = scratch.join("ghostty");
-    fs::create_dir_all(&ghostty_dir).unwrap();
-    let original = "keybind = ctrl+shift+c=copy\nfont-family = Menlo\n";
-    fs::write(ghostty_dir.join("config"), original).unwrap();
-    std::env::set_var("XDG_CONFIG_HOME", &scratch);
+    sandbox_env(&scratch);
 
     let adapter = TerminalApp::Ghostty.adapter();
     let path = adapter.config_path().unwrap();
+    fs::create_dir_all(path.parent().unwrap()).unwrap();
+    let original = "keybind = ctrl+shift+c=copy\nfont-family = Menlo\n";
+    fs::write(&path, original).unwrap();
 
     assert!(!backup::has_backup(TerminalApp::Ghostty));
     backup::snapshot(TerminalApp::Ghostty, &path).unwrap();
@@ -237,7 +273,7 @@ fn undo_removes_a_config_that_did_not_exist_before_the_change() {
     let _guard = ENV_LOCK.lock().unwrap();
     let scratch = std::env::temp_dir().join(format!("sheets-undo-fresh-{}", std::process::id()));
     let _ = fs::remove_dir_all(&scratch);
-    std::env::set_var("XDG_CONFIG_HOME", &scratch);
+    sandbox_env(&scratch);
 
     let adapter = TerminalApp::Kitty.adapter();
     let path = adapter.config_path().unwrap();
@@ -259,7 +295,7 @@ fn undo_with_nothing_to_undo_is_an_error() {
     let _guard = ENV_LOCK.lock().unwrap();
     let scratch = std::env::temp_dir().join(format!("sheets-undo-none-{}", std::process::id()));
     let _ = fs::remove_dir_all(&scratch);
-    std::env::set_var("XDG_CONFIG_HOME", &scratch);
+    sandbox_env(&scratch);
 
     assert!(!backup::has_backup(TerminalApp::Alacritty));
     let path = TerminalApp::Alacritty.adapter().config_path().unwrap();
