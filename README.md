@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="public/ghost-icon.png" width="120" height="120" alt="Sheets icon" />
+</p>
+
 # Sheets
 
 A desktop app for managing terminal themes, fonts, and opacity across
