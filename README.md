@@ -10,22 +10,37 @@ theme export for sharing your own creations.
 
 ## Status
 
-Early scaffolding — not yet functional.
+Functional and in daily use on macOS. Linux (Omarchy) is supported in code —
+all three adapters use standard XDG config paths — but hasn't been verified
+on a real machine yet.
 
-## Planned features
+## Screenshots
 
+<p align="center">
+  <img src="screenshots/main-window.png" width="380" alt="Sheets main window" />
+  <img src="screenshots/create-theme.png" width="280" alt="Create Theme window with live preview" />
+</p>
+
+## Features
+
+- Live theme picker: ~460 imported Ghostty built-ins, plus your own, in one
+  searchable dropdown, with a live syntax-highlighted preview
 - Color wheel / HEX input for foreground, background, and palette colors
+- Create a theme by hand, or edit whatever theme is currently applied — an
+  edit to a pre-installed theme always saves as a separate theme, never
+  overwriting the original
+- Import a `sheets-theme.json` via File > Import Theme… or macOS
+  "Open With > Sheets"; export your own the same way
+- Day / Night / Both theme designation per app
+- Font family + size picker (reads installed system fonts)
 - Opacity slider
-- Font family + size picker
-- Live preview pane (sample code block + pixelated splash icon recoloring)
-- Create custom themes by hand and export them as `sheets-theme.json`,
-  tracked as "user installed" vs. pre-installed
-- Tag themes as Dark / Light / Both
-- Cross-platform: macOS and Linux (Omarchy), auto-detecting each app's
-  config file location
+- One-level undo for the last change made to any app's config
+- Manually locate a config file if Sheets can't auto-detect one
+- Help menu: check for updates, links to this repo and tylersuits.com,
+  and a contact address
 - Supports Ghostty, Kitty, and Alacritty (Alacritty via a TOML adapter,
   the other two via flat key-value config parsing)
-- Distributed via tylersuits.com/sheets and GitHub Releases
+- Distributed via GitHub Releases
 
 ## Theme repo format
 
