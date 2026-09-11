@@ -231,14 +231,17 @@ pub fn run() {
         .build(tauri::generate_context!())
         .expect("error while building tauri application");
 
-    app.run(|app_handle, event| {
-        // Fired on macOS when a file is opened via Finder (double-click or
-        // "Open With > Sheets"), whether Sheets was already running or this
-        // is what launched it.
-        if let tauri::RunEvent::Opened { urls } = event {
+    app.run(|_app_handle, _event| {
+        // `RunEvent::Opened` only exists on macOS/iOS/Android — fired there
+        // when a file is opened via Finder (double-click or "Open With >
+        // Sheets"), whether Sheets was already running or this launched it.
+        // There's no Linux equivalent to wire up here; Omarchy support is
+        // otherwise just the adapters' own XDG-path handling.
+        #[cfg(target_os = "macos")]
+        if let tauri::RunEvent::Opened { urls } = _event {
             for url in urls {
                 if let Ok(path) = url.to_file_path() {
-                    import_theme_and_notify(app_handle, &path);
+                    import_theme_and_notify(_app_handle, &path);
                 }
             }
         }
