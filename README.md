@@ -14,6 +14,16 @@ Functional and in daily use on macOS. Linux (Omarchy) is supported in code —
 all three adapters use standard XDG config paths — but hasn't been verified
 on a real machine yet.
 
+## Install
+
+```bash
+brew install tylersuits1/Sheets/sheets
+```
+
+(the cask lives in this repo, at [`Casks/sheets.rb`](Casks/sheets.rb) — no separate tap repo)
+
+Or download `Sheets_0.1.0_aarch64.dmg` from the [latest release](https://github.com/tylersuits1/Sheets/releases/latest) and drag it into Applications.
+
 ## Screenshots
 
 <p align="center">
