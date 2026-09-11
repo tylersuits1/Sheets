@@ -1,17 +1,9 @@
 import { invoke } from "@tauri-apps/api/core";
 import { emit } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { renderPreview, type Palette } from "./theme-preview";
 
 type ThemeVariant = "dark" | "light" | "both";
-
-interface Palette {
-  background: string;
-  foreground: string;
-  cursor: string | null;
-  selection_background: string | null;
-  selection_foreground: string | null;
-  ansi: string[];
-}
 
 const ANSI_LABELS = [
   "0 Black", "1 Red", "2 Green", "3 Yellow", "4 Blue", "5 Magenta", "6 Cyan", "7 White",
@@ -87,6 +79,8 @@ function makeColorField(label: string, initialHex: string): ColorField {
   };
 }
 
+const previewWindowEl = document.querySelector<HTMLElement>("#preview-window")!;
+const previewBodyEl = document.querySelector<HTMLElement>("#preview-body")!;
 const editorTitleEl = document.querySelector<HTMLElement>("#editor-title")!;
 const editorHintEl = document.querySelector<HTMLElement>("#editor-hint")!;
 const nameInput = document.querySelector<HTMLInputElement>("#theme-name")!;
@@ -112,6 +106,31 @@ ansiFields.slice(8, 16).forEach((f) => ansiBrightEl.appendChild(f.row));
 function errorMessage(err: unknown): string {
   return typeof err === "string" ? err : err instanceof Error ? err.message : String(err);
 }
+
+function currentPalette(): Palette {
+  return {
+    background: background.get(),
+    foreground: foreground.get(),
+    cursor: cursor.get(),
+    selection_background: selectionBackground.get(),
+    selection_foreground: selectionForeground.get(),
+    ansi: ansiFields.map((f) => f.get()),
+  };
+}
+
+function updatePreview() {
+  renderPreview(previewWindowEl, previewBodyEl, currentPalette());
+}
+
+// Live preview: re-render on every color edit, whether from the wheel or
+// typing a hex code. Delegated so it doesn't need touching `makeColorField`.
+document.addEventListener("input", (e) => {
+  if (e.target instanceof HTMLInputElement && e.target.closest(".color-row")) {
+    updatePreview();
+  }
+});
+
+updatePreview();
 
 interface EditSeed {
   name: string;
@@ -141,6 +160,7 @@ interface EditSeed {
   if (seed.palette.selection_background) selectionBackground.set(seed.palette.selection_background);
   if (seed.palette.selection_foreground) selectionForeground.set(seed.palette.selection_foreground);
   seed.palette.ansi.forEach((hex, i) => ansiFields[i]?.set(hex));
+  updatePreview();
 })();
 
 cancelBtn.addEventListener("click", () => {
@@ -155,17 +175,12 @@ saveBtn.addEventListener("click", async () => {
     return;
   }
 
-  const palette: Palette = {
-    background: background.get(),
-    foreground: foreground.get(),
-    cursor: cursor.get(),
-    selection_background: selectionBackground.get(),
-    selection_foreground: selectionForeground.get(),
-    ansi: ansiFields.map((f) => f.get()),
-  };
-
   try {
-    const theme = await invoke("create_custom_theme", { name, variant: variantSelect.value as ThemeVariant, palette });
+    const theme = await invoke("create_custom_theme", {
+      name,
+      variant: variantSelect.value as ThemeVariant,
+      palette: currentPalette(),
+    });
     await emit("theme-created", theme);
     getCurrentWindow().close();
   } catch (err) {
