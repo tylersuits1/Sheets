@@ -9,6 +9,7 @@ mod ghostty_import;
 mod kv_config;
 pub mod theme;
 pub mod theme_store;
+mod update_check;
 
 // Every unit test that sets the process-global `XDG_CONFIG_HOME` env var
 // (in day_night, config_override, etc.) must serialize on this ONE lock, not
@@ -23,7 +24,12 @@ pub(crate) mod test_support {
 
 use tauri::menu::{MenuBuilder, MenuItemBuilder, SubmenuBuilder};
 use tauri::{Emitter, Manager, WebviewUrl, WebviewWindowBuilder};
-use tauri_plugin_dialog::DialogExt;
+use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind};
+use tauri_plugin_opener::OpenerExt;
+
+const GITHUB_URL: &str = "https://github.com/tylersuits1/Sheets";
+const WEBSITE_URL: &str = "https://tylersuits.com";
+const CONTACT_EMAIL_URL: &str = "mailto:hello@tylersuits.com";
 
 fn build_menu(app: &tauri::App) -> tauri::Result<tauri::menu::Menu<tauri::Wry>> {
     let create_theme = MenuItemBuilder::with_id("create-theme", "Create Theme…")
@@ -61,7 +67,26 @@ fn build_menu(app: &tauri::App) -> tauri::Result<tauri::menu::Menu<tauri::Wry>> 
 
     let app_menu = SubmenuBuilder::new(app, "Sheets").about(None).separator().quit().build()?;
 
-    MenuBuilder::new(app).item(&app_menu).item(&file_menu).item(&edit_menu).item(&window_menu).build()
+    let check_updates = MenuItemBuilder::with_id("check-for-updates", "Check for Updates…").build(app)?;
+    let sheets_github = MenuItemBuilder::with_id("sheets-github", "Sheets on GitHub").build(app)?;
+    let visit_website = MenuItemBuilder::with_id("visit-website", "More Apps at tylersuits.com").build(app)?;
+    let contact_email = MenuItemBuilder::with_id("contact-email", "Contact hello@tylersuits.com").build(app)?;
+    let help_menu = SubmenuBuilder::new(app, "Help")
+        .item(&check_updates)
+        .separator()
+        .item(&sheets_github)
+        .item(&visit_website)
+        .separator()
+        .item(&contact_email)
+        .build()?;
+
+    MenuBuilder::new(app)
+        .item(&app_menu)
+        .item(&file_menu)
+        .item(&edit_menu)
+        .item(&window_menu)
+        .item(&help_menu)
+        .build()
 }
 
 pub(crate) fn open_or_focus(app: &tauri::AppHandle, label: &str, page: &str, title: &str) {
@@ -73,6 +98,49 @@ pub(crate) fn open_or_focus(app: &tauri::AppHandle, label: &str, page: &str, tit
         .title(title)
         .inner_size(460.0, 720.0)
         .build();
+}
+
+/// Checks GitHub for a newer release, off the main thread since it's a
+/// blocking network call. Clicking through on an available update just opens
+/// the release page — its own "Install" instructions cover how to update.
+fn check_for_updates(app: &tauri::AppHandle) {
+    let app_handle = app.clone();
+    std::thread::spawn(move || match update_check::check() {
+        Ok(status) if status.update_available => {
+            let release_url = status.release_url;
+            let opener_handle = app_handle.clone();
+            app_handle
+                .dialog()
+                .message(format!(
+                    "You're on version {}. Version {} is available.",
+                    status.current_version, status.latest_version
+                ))
+                .title("Update Available")
+                .buttons(MessageDialogButtons::OkCancelCustom("View Release".into(), "Later".into()))
+                .show(move |view_release| {
+                    if view_release {
+                        let _ = opener_handle.opener().open_url(release_url, None::<&str>);
+                    }
+                });
+        }
+        Ok(status) => {
+            app_handle
+                .dialog()
+                .message(format!("You're on the latest version ({}).", status.current_version))
+                .title("Up to Date")
+                .buttons(MessageDialogButtons::Ok)
+                .show(|_| {});
+        }
+        Err(err) => {
+            app_handle
+                .dialog()
+                .message(format!("Couldn't check for updates: {err}"))
+                .title("Update Check Failed")
+                .kind(MessageDialogKind::Error)
+                .buttons(MessageDialogButtons::Ok)
+                .show(|_| {});
+        }
+    });
 }
 
 /// Imports a `sheets-theme.json` file and tells the main window about the
@@ -120,6 +188,16 @@ pub fn run() {
                     let Ok(path) = file.into_path() else { return };
                     import_theme_and_notify(&app_handle, &path);
                 });
+            }
+            "check-for-updates" => check_for_updates(app),
+            "sheets-github" => {
+                let _ = app.opener().open_url(GITHUB_URL, None::<&str>);
+            }
+            "visit-website" => {
+                let _ = app.opener().open_url(WEBSITE_URL, None::<&str>);
+            }
+            "contact-email" => {
+                let _ = app.opener().open_url(CONTACT_EMAIL_URL, None::<&str>);
             }
             _ => {}
         })
