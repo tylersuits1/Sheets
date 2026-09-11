@@ -17,10 +17,12 @@ on a real machine yet.
 ## Install
 
 ```bash
-brew install tylersuits1/Sheets/sheets
+brew trust --cask tylersuits1/sheets/sheets
+brew tap tylersuits1/sheets https://github.com/tylersuits1/Sheets.git
+brew install --cask sheets
 ```
 
-(the cask lives in this repo, at [`Casks/sheets.rb`](Casks/sheets.rb) — no separate tap repo)
+(the cask lives in this repo, at [`Casks/sheets.rb`](Casks/sheets.rb) — no separate tap repo. The `brew trust` step is required first since this isn't an official Homebrew tap — see [Tap Trust](https://docs.brew.sh/Tap-Trust).)
 
 Or download `Sheets_0.1.0_aarch64.dmg` from the [latest release](https://github.com/tylersuits1/Sheets/releases/latest) and drag it into Applications.
 
